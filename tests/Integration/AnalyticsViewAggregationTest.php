@@ -205,6 +205,58 @@ class AnalyticsViewAggregationTest extends TestCase
         $this->assertEqualsWithDelta($expectedVTR, $result->calc_vtr, 0.01);
     }
 
+    public function test_v_ad_set_totals_calculates_cpl_from_sums(): void
+    {
+        AdSnapshot::create([
+            'ad_id' => $this->ad->id,
+            'snapshot_date' => now()->toDateString(),
+            'granularity' => 'daily',
+            'impressions' => 4000,
+            'clicks' => 100,
+            'leads' => 25,
+            'spend' => 500.00,
+            'ctr' => 0,
+            'cpm' => 0,
+            'cpc' => 0,
+            'cpl' => 0,
+            'source' => 'api',
+            'pulled_at' => now(),
+        ]);
+
+        $result = DB::table('v_ad_set_totals')->where('ad_set_id', $this->adSet->id)->first();
+
+        $this->assertNotNull($result);
+        $this->assertEquals(25, $result->total_leads);
+
+        $expectedCPL = 500.00 / 25;
+        $this->assertEqualsWithDelta($expectedCPL, $result->calc_cpl, 0.01);
+    }
+
+    public function test_v_ad_set_totals_calculates_frequency_from_sums(): void
+    {
+        AdSnapshot::create([
+            'ad_id' => $this->ad->id,
+            'snapshot_date' => now()->toDateString(),
+            'granularity' => 'daily',
+            'impressions' => 12000,
+            'reach' => 3000,
+            'clicks' => 150,
+            'spend' => 300.00,
+            'ctr' => 0,
+            'cpm' => 0,
+            'cpc' => 0,
+            'source' => 'api',
+            'pulled_at' => now(),
+        ]);
+
+        $result = DB::table('v_ad_set_totals')->where('ad_set_id', $this->adSet->id)->first();
+
+        $this->assertNotNull($result);
+
+        $expectedFrequency = 12000 / 3000;
+        $this->assertEqualsWithDelta($expectedFrequency, $result->calc_frequency, 0.01);
+    }
+
     public function test_v_ad_set_totals_aggregates_multiple_ads(): void
     {
         $ad2 = Ad::create([
@@ -272,6 +324,32 @@ class AnalyticsViewAggregationTest extends TestCase
         $this->assertNotNull($result);
         $this->assertEquals(0, $result->calc_ctr);
         $this->assertEquals(0, $result->calc_cpm);
+    }
+
+    public function test_v_ad_set_totals_handles_zero_leads_and_zero_reach(): void
+    {
+        AdSnapshot::create([
+            'ad_id' => $this->ad->id,
+            'snapshot_date' => now()->toDateString(),
+            'granularity' => 'daily',
+            'impressions' => 1500,
+            'reach' => 0,
+            'clicks' => 20,
+            'leads' => 0,
+            'spend' => 75.00,
+            'ctr' => 0,
+            'cpm' => 0,
+            'cpc' => 0,
+            'cpl' => 0,
+            'source' => 'api',
+            'pulled_at' => now(),
+        ]);
+
+        $result = DB::table('v_ad_set_totals')->where('ad_set_id', $this->adSet->id)->first();
+
+        $this->assertNotNull($result);
+        $this->assertEquals(0, $result->calc_cpl);
+        $this->assertNull($result->calc_frequency);
     }
 
     public function test_v_campaign_platform_totals_aggregates_all_ad_sets(): void
@@ -416,6 +494,80 @@ class AnalyticsViewAggregationTest extends TestCase
 
         $expectedCPA = 1000.00 / 50;
         $this->assertEqualsWithDelta($expectedCPA, $result->calc_cpa, 0.01);
+    }
+
+    public function test_v_campaign_platform_totals_calculates_vtr_from_sums(): void
+    {
+        AdSnapshot::create([
+            'ad_id' => $this->ad->id,
+            'snapshot_date' => now()->toDateString(),
+            'granularity' => 'daily',
+            'impressions' => 20000,
+            'clicks' => 300,
+            'video_views' => 8000,
+            'spend' => 1200.00,
+            'ctr' => 0,
+            'cpm' => 0,
+            'cpc' => 0,
+            'source' => 'api',
+            'pulled_at' => now(),
+        ]);
+
+        $result = DB::table('v_campaign_platform_totals')->where('campaign_platform_id', $this->campaignPlatform->id)->first();
+
+        $this->assertNotNull($result);
+
+        $expectedVTR = (8000 / 20000) * 100;
+        $this->assertEqualsWithDelta($expectedVTR, $result->calc_vtr, 0.01);
+    }
+
+    public function test_v_campaign_platform_totals_aggregates_engagement(): void
+    {
+        AdSnapshot::create([
+            'ad_id' => $this->ad->id,
+            'snapshot_date' => now()->toDateString(),
+            'granularity' => 'daily',
+            'impressions' => 4000,
+            'clicks' => 80,
+            'engagement' => 120,
+            'spend' => 200.00,
+            'ctr' => 0,
+            'cpm' => 0,
+            'cpc' => 0,
+            'source' => 'api',
+            'pulled_at' => now(),
+        ]);
+
+        $result = DB::table('v_campaign_platform_totals')->where('campaign_platform_id', $this->campaignPlatform->id)->first();
+
+        $this->assertNotNull($result);
+        $this->assertEquals(120, $result->total_engagement);
+    }
+
+    public function test_v_campaign_platform_totals_handles_zero_leads_and_zero_reach(): void
+    {
+        AdSnapshot::create([
+            'ad_id' => $this->ad->id,
+            'snapshot_date' => now()->toDateString(),
+            'granularity' => 'daily',
+            'impressions' => 2200,
+            'reach' => 0,
+            'clicks' => 30,
+            'leads' => 0,
+            'spend' => 110.00,
+            'ctr' => 0,
+            'cpm' => 0,
+            'cpc' => 0,
+            'cpl' => 0,
+            'source' => 'api',
+            'pulled_at' => now(),
+        ]);
+
+        $result = DB::table('v_campaign_platform_totals')->where('campaign_platform_id', $this->campaignPlatform->id)->first();
+
+        $this->assertNotNull($result);
+        $this->assertEquals(0, $result->calc_cpl);
+        $this->assertNull($result->calc_frequency);
     }
 
     public function test_views_exclude_untracked_ads(): void

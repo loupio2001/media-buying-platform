@@ -56,3 +56,18 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Testing with PostgreSQL
+
+This project includes analytics integration tests that are designed to run on PostgreSQL.
+
+1. Create a local PostgreSQL test database (default name in this repo: `media_buying_data_test`).
+2. Adjust credentials in `phpunit.pgsql.xml` if needed.
+3. Run one of the commands below:
+
+```bash
+composer test:pgsql
+composer test:integration:pgsql
+```
+
+Default `composer test` remains SQLite-based and will skip PostgreSQL-only integration tests.

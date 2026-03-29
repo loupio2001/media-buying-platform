@@ -7,6 +7,7 @@ use App\Models\Ad;
 use App\Models\AdSet;
 use App\Models\AdSnapshot;
 use App\Models\PlatformConnection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class SnapshotIngestionService
@@ -14,6 +15,7 @@ class SnapshotIngestionService
     public function upsertSnapshot(array $data): array
     {
         $data['pulled_at'] = now();
+        $data['snapshot_date'] = $this->normalizeSnapshotDate($data['snapshot_date']);
 
         $snapshot = AdSnapshot::updateOrCreate(
             [
@@ -41,6 +43,7 @@ class SnapshotIngestionService
         DB::transaction(function () use ($snapshots, &$ids, &$cpIds, &$lastSnapshot) {
             foreach ($snapshots as $payload) {
                 $payload['pulled_at'] = now();
+                $payload['snapshot_date'] = $this->normalizeSnapshotDate($payload['snapshot_date']);
 
                 $snapshot = AdSnapshot::updateOrCreate(
                     [
@@ -128,5 +131,12 @@ class SnapshotIngestionService
         $ad = Ad::with('adSet.campaignPlatform')->find($adId);
 
         return $ad?->adSet?->campaignPlatform?->id;
+    }
+
+    private function normalizeSnapshotDate(mixed $value): string
+    {
+        return Carbon::parse($value)
+            ->setTimezone((string) config('app.timezone', 'Africa/Casablanca'))
+            ->toDateString();
     }
 }
