@@ -39,4 +39,11 @@ return [
     // Internal API token for Python collectors
     'internal_api_token' => env('INTERNAL_API_TOKEN'),
 
+    'auth' => [
+        'allowed_email_domains' => array_values(array_filter(array_map(
+            static fn (string $domain): string => strtolower(trim($domain)),
+            explode(',', (string) env('AUTH_ALLOWED_EMAIL_DOMAINS', 'havasmad.com'))
+        ))),
+    ],
+
 ];

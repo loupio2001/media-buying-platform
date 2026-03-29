@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BriefController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\CampaignPlatformController;
@@ -21,6 +22,15 @@ Route::prefix('internal/v1')
         Route::patch('/platform-connections/{id}/sync-status', [SnapshotController::class, 'updateSyncStatus']);
         Route::get('/platform-connections/{id}/credentials', [SnapshotController::class, 'credentials']);
     });
+
+Route::prefix('auth')->group(function () {
+    Route::post('/login', [AuthController::class, 'login']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+    });
+});
 
 Route::middleware(['auth:sanctum', 'role:admin,manager'])
     ->group(function () {

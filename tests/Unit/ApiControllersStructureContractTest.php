@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Http\Controllers\Api\ApiController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BriefController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\CampaignPlatformController;
@@ -17,6 +18,7 @@ class ApiControllersStructureContractTest extends TestCase
     public function test_all_external_api_controllers_extend_api_controller(): void
     {
         $controllers = [
+            AuthController::class,
             PlatformController::class,
             ClientController::class,
             CampaignController::class,
@@ -37,6 +39,7 @@ class ApiControllersStructureContractTest extends TestCase
     public function test_external_api_controllers_do_not_use_direct_response_json_calls(): void
     {
         $files = [
+            'app/Http/Controllers/Api/AuthController.php',
             'app/Http/Controllers/Api/PlatformController.php',
             'app/Http/Controllers/Api/ClientController.php',
             'app/Http/Controllers/Api/CampaignController.php',

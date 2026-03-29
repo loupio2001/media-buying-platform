@@ -3,14 +3,31 @@
 namespace App\Models;
 
 use App\Enums\UserRole;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saving(function (Model $model): void {
+            if (!$model instanceof self || !$model->isDirty('email')) {
+                return;
+            }
+
+            if (!self::isEmailDomainAllowed((string) $model->email)) {
+                throw ValidationException::withMessages([
+                    'email' => ['The provided email domain is not allowed.'],
+                ]);
+            }
+        });
+    }
 
     protected $dateFormat = 'Y-m-d H:i:sO';
 
@@ -71,5 +88,18 @@ class User extends Authenticatable
     public function unreadNotificationCount(): int
     {
         return $this->notifications()->where('is_read', false)->count();
+    }
+
+    public static function isEmailDomainAllowed(string $email): bool
+    {
+        $allowedDomains = config('services.auth.allowed_email_domains', ['havasmad.com']);
+
+        if (!is_array($allowedDomains) || $allowedDomains === []) {
+            $allowedDomains = ['havasmad.com'];
+        }
+
+        $domain = strtolower((string) str($email)->afterLast('@'));
+
+        return in_array($domain, $allowedDomains, true);
     }
 }
