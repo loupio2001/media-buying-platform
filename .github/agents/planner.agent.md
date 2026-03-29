@@ -1,7 +1,7 @@
 ---
 name: Planner
 description: Architecture planning, code review, task breakdown, and coordination for the Havas Media Platform. Does NOT edit code — only plans and reviews.
-tools: ['search', 'codebase']
+tools: ['search', 'codebase', 'terminal']
 handoffs:
   - label: Build with Laravel Architect
     agent: laravel-architect
