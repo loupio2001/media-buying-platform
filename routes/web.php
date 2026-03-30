@@ -4,6 +4,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CampaignListController;
 use App\Http\Controllers\CampaignPageController;
 use App\Http\Controllers\PlatformConnectionOAuthController;
+use App\Http\Controllers\PlatformConnectionSettingsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/campaigns/{campaign}', CampaignPageController::class)->name('web.campaigns.show');
 
     Route::middleware('role:admin,manager')->group(function () {
+        Route::get('/settings/platform-connections', [PlatformConnectionSettingsController::class, 'index'])
+            ->name('web.platform-connections.index');
+        Route::post('/settings/platform-connections', [PlatformConnectionSettingsController::class, 'store'])
+            ->name('web.platform-connections.store');
+        Route::patch('/settings/platform-connections/{platformConnection}', [PlatformConnectionSettingsController::class, 'update'])
+            ->name('web.platform-connections.update');
+        Route::delete('/settings/platform-connections/{platformConnection}', [PlatformConnectionSettingsController::class, 'destroy'])
+            ->name('web.platform-connections.destroy');
+
         Route::get(
             '/settings/platform-connections/{platform}/authorize',
             [PlatformConnectionOAuthController::class, 'redirectToProvider']

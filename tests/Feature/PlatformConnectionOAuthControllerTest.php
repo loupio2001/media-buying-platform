@@ -69,7 +69,7 @@ class PlatformConnectionOAuthControllerTest extends TestCase
             ])
             ->get(route('web.platform-connections.oauth.callback', ['platform' => 'meta', 'state' => $state, 'code' => 'sample-code']));
 
-        $response->assertRedirect(route('dashboard'));
+        $response->assertRedirect(route('web.platform-connections.index'));
         $response->assertSessionHas('status');
 
         $this->assertDatabaseHas('platform_connections', [
@@ -98,7 +98,7 @@ class PlatformConnectionOAuthControllerTest extends TestCase
             ])
             ->get(route('web.platform-connections.oauth.callback', ['platform' => 'meta', 'state' => 'wrong-state', 'code' => 'sample-code']));
 
-        $response->assertRedirect(route('dashboard'));
+        $response->assertRedirect(route('web.platform-connections.index'));
         $response->assertSessionHas('error');
 
         $this->assertDatabaseCount('platform_connections', 0);

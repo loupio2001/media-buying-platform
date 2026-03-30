@@ -27,6 +27,11 @@
                             <a href="{{ route('web.campaigns.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
                                 Campaigns
                             </a>
+                            @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                                <a href="{{ route('web.platform-connections.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
+                                    Connections
+                                </a>
+                            @endif
                             <form action="{{ route('logout') }}" method="POST">
                                 @csrf
                                 <button type="submit" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
@@ -43,6 +48,18 @@
             </header>
 
             <main class="relative mx-auto w-full max-w-6xl px-6 py-10 sm:px-8">
+                @if (session('status'))
+                    <div class="mb-6 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-4 py-3 text-sm text-emerald-200">
+                        {{ session('status') }}
+                    </div>
+                @endif
+
+                @if (session('error'))
+                    <div class="mb-6 rounded-lg border border-rose-700/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
+                        {{ session('error') }}
+                    </div>
+                @endif
+
                 @yield('content')
             </main>
         </div>

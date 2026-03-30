@@ -24,7 +24,7 @@ class PlatformConnectionOAuthController extends Controller
 
         $platformModel = Platform::query()->where('slug', 'meta')->firstOrFail();
         if (! $platformModel->api_supported || ! $platformModel->is_active) {
-            return redirect()->route('dashboard')->with('error', 'Meta is not available for API connections.');
+            return redirect()->route('web.platform-connections.index')->with('error', 'Meta is not available for API connections.');
         }
 
         $state = Str::random(40);
@@ -41,7 +41,7 @@ class PlatformConnectionOAuthController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return redirect()->route('dashboard')->with('error', $exception->getMessage());
+            return redirect()->route('web.platform-connections.index')->with('error', $exception->getMessage());
         }
 
         return redirect()->away($authorizeUrl);
@@ -58,12 +58,12 @@ class PlatformConnectionOAuthController extends Controller
 
         $actualState = (string) $request->query('state', '');
         if ($expectedState === '' || ! hash_equals($expectedState, $actualState) || $initiatorUserId !== (int) $request->user()->id) {
-            return redirect()->route('dashboard')->with('error', 'Invalid OAuth state, please retry the connection flow.');
+            return redirect()->route('web.platform-connections.index')->with('error', 'Invalid OAuth state, please retry the connection flow.');
         }
 
         $code = (string) $request->query('code', '');
         if ($code === '') {
-            return redirect()->route('dashboard')->with('error', 'Meta OAuth callback did not return a code.');
+            return redirect()->route('web.platform-connections.index')->with('error', 'Meta OAuth callback did not return a code.');
         }
 
         $redirectUri = (string) config('services.meta_ads.redirect_uri');
@@ -85,11 +85,11 @@ class PlatformConnectionOAuthController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return redirect()->route('dashboard')->with('error', $exception->getMessage());
+            return redirect()->route('web.platform-connections.index')->with('error', $exception->getMessage());
         }
 
         return redirect()
-            ->route('dashboard')
+            ->route('web.platform-connections.index')
             ->with('status', 'Meta connection synced successfully (connection #' . $connection->id . ').');
     }
 }
