@@ -6,29 +6,11 @@ import math
 import os
 from typing import Any, Literal
 
-import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+
+from havas_collectors.ai.providers import SUPPORTED_PROVIDERS, AiProvider, build_provider, default_model_for
 
 LOGGER = logging.getLogger(__name__)
-
-try:
-    from anthropic import (
-        APIConnectionError,
-        APIStatusError,
-        APITimeoutError,
-        Anthropic,
-        RateLimitError,
-    )
-
-    ANTHROPIC_AVAILABLE = True
-except ImportError:
-    APIConnectionError = None  # type: ignore[assignment]
-    APIStatusError = None  # type: ignore[assignment]
-    APITimeoutError = None  # type: ignore[assignment]
-    RateLimitError = None  # type: ignore[assignment]
-    Anthropic = None  # type: ignore[assignment]
-    ANTHROPIC_AVAILABLE = False
 
 
 class CommentaryRequest(BaseModel):
@@ -118,113 +100,74 @@ def _safe_ratio(numerator: float, denominator: float, factor: float = 1.0) -> fl
     return (numerator / denominator) * factor
 
 
-def _is_retryable_exception(error: BaseException) -> bool:
-    retryable_classes: tuple[type[BaseException], ...] = tuple(
-        candidate
-        for candidate in (
-            APIConnectionError,
-            APITimeoutError,
-            RateLimitError,
-            httpx.TimeoutException,
-            httpx.NetworkError,
-            TimeoutError,
-        )
-        if isinstance(candidate, type)
-    )
-    if retryable_classes and isinstance(error, retryable_classes):
-        return True
-
-    if APIStatusError is not None and isinstance(error, APIStatusError):
-        status_code = getattr(error, "status_code", None)
-        return status_code == 429 or (isinstance(status_code, int) and status_code >= 500)
-
-    return False
-
-
 class ReportCommentator:
-    """Generate campaign reporting commentary using Anthropic with safe fallback."""
+    """Generate campaign reporting commentary using selected AI provider with safe fallback."""
 
     def __init__(
         self,
         *,
         api_key: str | None = None,
-        model: str = "claude-3-5-sonnet-latest",
+        model: str | None = None,
         timeout_seconds: float = 25.0,
         max_tokens: int = 700,
     ) -> None:
-        self.model = model
+        provider_name = os.getenv("AI_PROVIDER", "groq").strip().lower()
+        self.provider_name = provider_name if provider_name else "groq"
+
+        self.model = (model or os.getenv("AI_MODEL") or default_model_for(self.provider_name)).strip()
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
+        self._provider: AiProvider | None = None
+        self._provider_error: str | None = None
 
-        self._client: Anthropic | None = None
+        resolved_key = (api_key or os.getenv("AI_API_KEY", "")).strip()
 
-        resolved_key = (api_key or os.getenv("ANTHROPIC_API_KEY", "")).strip()
-        if not ANTHROPIC_AVAILABLE:
-            LOGGER.info("Anthropic SDK not installed. Falling back to local commentary mode.")
+        if self.provider_name not in SUPPORTED_PROVIDERS:
+            self._provider_error = f"unsupported_provider:{self.provider_name}"
+            LOGGER.warning(
+                "Unsupported AI_PROVIDER=%s. Supported values: %s",
+                self.provider_name,
+                ", ".join(sorted(SUPPORTED_PROVIDERS)),
+            )
             return
 
-        if not resolved_key:
-            LOGGER.info("ANTHROPIC_API_KEY missing. Falling back to local commentary mode.")
+        self._provider = build_provider(
+            self.provider_name,
+            api_key=resolved_key,
+            model=self.model,
+            timeout_seconds=timeout_seconds,
+            max_tokens=max_tokens,
+        )
+
+        if self._provider is None:
+            self._provider_error = f"provider_init_failed:{self.provider_name}"
+            LOGGER.warning("Failed to initialize provider for AI_PROVIDER=%s", self.provider_name)
             return
 
-        try:
-            self._client = Anthropic(api_key=resolved_key, timeout=timeout_seconds)
-        except TypeError:
-            # Backward compatibility for SDK versions without timeout argument.
-            self._client = Anthropic(api_key=resolved_key)
+        if not self._provider.is_available:
+            LOGGER.info("AI_API_KEY missing. Falling back to local commentary mode.")
 
     def generate_commentary(self, payload: CommentaryRequest | dict[str, Any]) -> ReportCommentary:
         """Return structured commentary from AI response or local fallback logic."""
         request = payload if isinstance(payload, CommentaryRequest) else CommentaryRequest.model_validate(payload)
 
-        if self._client is None:
-            return self._build_fallback(request, reason="anthropic_unavailable")
+        if self._provider is None:
+            return self._build_fallback(request, reason=f"{self.provider_name}_unavailable")
+
+        if not self._provider.is_available:
+            return self._build_fallback(request, reason=f"{self.provider_name}_unavailable")
 
         system_prompt, user_prompt = self._build_prompts(request)
 
         try:
-            raw_text = self._invoke_anthropic(system_prompt=system_prompt, user_prompt=user_prompt)
+            raw_text = self._provider.invoke(system_prompt=system_prompt, user_prompt=user_prompt)
             return self._parse_llm_response(raw_text)
         except (ValidationError, ValueError, json.JSONDecodeError) as error:
-            LOGGER.warning("Invalid Anthropic output, using fallback. reason=%s", error)
+            LOGGER.warning("Invalid %s output, using fallback. reason=%s", self.provider_name, error)
             return self._build_fallback(request, reason="invalid_llm_output")
         except Exception as error:  # pragma: no cover - depends on network/SDK runtime.
-            LOGGER.exception("Anthropic call failed, using fallback: %s", error)
-            return self._build_fallback(request, reason="anthropic_error")
-
-    @retry(
-        reraise=True,
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(min=1, max=10),
-        retry=retry_if_exception(_is_retryable_exception),
-    )
-    def _invoke_anthropic(self, *, system_prompt: str, user_prompt: str) -> str:
-        if self._client is None:
-            raise RuntimeError("Anthropic client is not configured")
-
-        response = self._client.messages.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            temperature=0.2,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-
-        content_blocks = getattr(response, "content", [])
-        extracted: list[str] = []
-
-        if isinstance(content_blocks, str):
-            extracted.append(content_blocks)
-        else:
-            for block in content_blocks:
-                text = getattr(block, "text", None)
-                if isinstance(text, str) and text.strip():
-                    extracted.append(text.strip())
-
-        if not extracted:
-            raise ValueError("Anthropic response did not contain text content")
-
-        return "\n".join(extracted)
+            LOGGER.exception("%s call failed, using fallback: %s", self.provider_name, error)
+            return self._build_fallback(request, reason=f"{self.provider_name}_error")
 
     def _build_prompts(self, request: CommentaryRequest) -> tuple[str, str]:
         system_prompt = (

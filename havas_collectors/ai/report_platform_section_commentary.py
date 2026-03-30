@@ -74,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         persisted = generate_and_persist_commentary(
             args.report_platform_section_id,
             client=client,
-            commentator=ReportCommentator(api_key=os.getenv("ANTHROPIC_API_KEY")),
+            commentator=ReportCommentator(),
         )
     except Exception:
         LOGGER.exception(
