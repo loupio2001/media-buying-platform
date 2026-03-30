@@ -45,6 +45,16 @@ return [
         'api_url' => env('LARAVEL_API_URL'),
     ],
 
+    'meta_ads' => [
+        'client_id' => env('META_APP_ID'),
+        'client_secret' => env('META_APP_SECRET'),
+        'redirect_uri' => env('META_REDIRECT_URI'),
+        'scopes' => array_values(array_filter(array_map(
+            static fn (string $scope): string => trim($scope),
+            explode(',', (string) env('META_SCOPES', 'ads_read,ads_management'))
+        ))),
+    ],
+
     'auth' => [
         'allowed_email_domains' => array_values(array_filter(array_map(
             static fn (string $domain): string => strtolower(trim($domain)),

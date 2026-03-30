@@ -3,6 +3,7 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CampaignListController;
 use App\Http\Controllers\CampaignPageController;
+use App\Http\Controllers\PlatformConnectionOAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -39,6 +40,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/campaigns', CampaignListController::class)->name('web.campaigns.index');
     Route::get('/campaigns/{campaign}/trend.csv', [CampaignPageController::class, 'exportTrendCsv'])->name('web.campaigns.trend.csv');
     Route::get('/campaigns/{campaign}', CampaignPageController::class)->name('web.campaigns.show');
+
+    Route::middleware('role:admin,manager')->group(function () {
+        Route::get(
+            '/settings/platform-connections/{platform}/authorize',
+            [PlatformConnectionOAuthController::class, 'redirectToProvider']
+        )->name('web.platform-connections.oauth.authorize');
+
+        Route::get(
+            '/settings/platform-connections/{platform}/callback',
+            [PlatformConnectionOAuthController::class, 'handleProviderCallback']
+        )->name('web.platform-connections.oauth.callback');
+    });
 
     Route::post('/logout', function (Request $request) {
         Auth::logout();
