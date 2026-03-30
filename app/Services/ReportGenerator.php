@@ -7,6 +7,7 @@ use App\Models\CampaignPlatform;
 use App\Models\Report;
 use App\Models\ReportPlatformSection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReportGenerator
 {
@@ -41,6 +42,12 @@ class ReportGenerator
 
     private function aggregateMetrics(CampaignPlatform $cp, string $start, string $end): array
     {
+        if (!Schema::hasTable('ad_snapshots')) {
+            return $this->emptyMetrics();
+        }
+
+        $defaults = $this->emptyMetrics();
+
         $result = DB::table('ad_snapshots AS s')
             ->join('ads AS a', 'a.id', '=', 's.ad_id')
             ->join('ad_sets AS aset', 'aset.id', '=', 'a.ad_set_id')
@@ -51,7 +58,7 @@ class ReportGenerator
             ->where('aset.is_tracked', true)
             ->selectRaw(
                 "
-                SUM(s.spend)::numeric AS spend,
+                 CAST(SUM(s.spend) AS DECIMAL(14, 4)) AS spend,
                 SUM(s.impressions) AS impressions,
                 SUM(s.reach) AS reach,
                 SUM(s.clicks) AS clicks,
@@ -62,7 +69,7 @@ class ReportGenerator
                 SUM(s.video_completions) AS video_completions,
                 SUM(s.engagement) AS engagement,
                 CASE WHEN SUM(s.impressions) > 0
-                     THEN ROUND(SUM(s.clicks)::numeric / SUM(s.impressions) * 100, 4)
+                     THEN ROUND(CAST(SUM(s.clicks) AS DECIMAL(14, 4)) / SUM(s.impressions) * 100, 4)
                      ELSE 0 END AS ctr,
                 CASE WHEN SUM(s.impressions) > 0
                      THEN ROUND(SUM(s.spend) / SUM(s.impressions) * 1000, 4)
@@ -77,16 +84,47 @@ class ReportGenerator
                      THEN ROUND(SUM(s.spend) / SUM(s.leads), 4)
                      ELSE NULL END AS cpl,
                 CASE WHEN SUM(s.impressions) > 0 AND SUM(s.video_views) > 0
-                     THEN ROUND(SUM(s.video_views)::numeric / SUM(s.impressions) * 100, 4)
+                     THEN ROUND(CAST(SUM(s.video_views) AS DECIMAL(14, 4)) / SUM(s.impressions) * 100, 4)
                      ELSE NULL END AS vtr,
                 CASE WHEN SUM(s.reach) > 0
-                     THEN ROUND(SUM(s.impressions)::numeric / SUM(s.reach), 4)
+                     THEN ROUND(CAST(SUM(s.impressions) AS DECIMAL(14, 4)) / SUM(s.reach), 4)
                      ELSE NULL END AS frequency
                 "
             )
             ->first();
 
-        return (array) $result;
+        $metrics = array_merge($defaults, (array) ($result ?? []));
+
+        foreach ($defaults as $key => $defaultValue) {
+            if ($metrics[$key] === null) {
+                $metrics[$key] = $defaultValue;
+            }
+        }
+
+        return $metrics;
+    }
+
+    private function emptyMetrics(): array
+    {
+        return [
+            'spend' => 0,
+            'impressions' => 0,
+            'reach' => null,
+            'clicks' => 0,
+            'link_clicks' => null,
+            'ctr' => null,
+            'cpm' => null,
+            'cpc' => null,
+            'conversions' => null,
+            'cpa' => null,
+            'leads' => null,
+            'cpl' => null,
+            'video_views' => null,
+            'video_completions' => null,
+            'vtr' => null,
+            'frequency' => null,
+            'engagement' => null,
+        ];
     }
 
     private function evaluateOverallPerformance(CampaignPlatform $cp): string

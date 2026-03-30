@@ -226,6 +226,11 @@ class WebDashboardTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertSee('Campagnes totales')
+            ->assertSee('Budget total (MAD)')
+            ->assertSee('Spend total (MAD)')
+            ->assertSee('CTR global (%)')
+            ->assertSee('Campagnes recentes')
             ->assertSee('Campaign Alpha')
             ->assertSee('Campaign Beta')
             ->assertViewHas('summary', function (array $summary) use ($isPgsql): bool {
@@ -244,6 +249,27 @@ class WebDashboardTest extends TestCase
 
                 return (float) $summary['total_spend'] === 180.0
                     && (float) $summary['global_ctr'] === 10.0;
+            });
+    }
+
+    public function test_authenticated_user_sees_empty_state_when_no_campaign_exists(): void
+    {
+        /** @var User $user */
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/dashboard');
+
+        $response
+            ->assertOk()
+            ->assertSee('Campagnes totales')
+            ->assertSee('Aucune campagne disponible pour le moment.')
+            ->assertViewHas('summary', function (array $summary): bool {
+                return $summary['total_campaigns'] === 0
+                    && $summary['active_campaigns'] === 0
+                    && $summary['running_campaigns'] === 0
+                    && (float) $summary['total_budget'] === 0.0
+                    && (float) $summary['total_spend'] === 0.0
+                    && (float) $summary['global_ctr'] === 0.0;
             });
     }
 }

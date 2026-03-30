@@ -39,6 +39,12 @@ return [
     // Internal API token for Python collectors
     'internal_api_token' => env('INTERNAL_API_TOKEN'),
 
+    'ai_report_commentary' => [
+        'python_binary' => env('PYTHON_BIN', 'python'),
+        'module' => env('AI_REPORT_COMMENTARY_MODULE', 'havas_collectors.ai.report_platform_section_commentary'),
+        'api_url' => env('LARAVEL_API_URL'),
+    ],
+
     'auth' => [
         'allowed_email_domains' => array_values(array_filter(array_map(
             static fn (string $domain): string => strtolower(trim($domain)),

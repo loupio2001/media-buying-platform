@@ -14,6 +14,8 @@ class RouteSecurityTest extends TestCase
             'api/internal/v1/snapshots/batch',
             'api/internal/v1/ad-sets/upsert',
             'api/internal/v1/ads/upsert',
+            'api/internal/v1/report-platform-sections/{reportPlatformSection}/ai-comments',
+            'api/internal/v1/report-platform-sections/{reportPlatformSection}/ai-context',
             'api/internal/v1/platform-connections/{id}/sync-status',
             'api/internal/v1/platform-connections/{id}/credentials',
         ];
@@ -35,6 +37,8 @@ class RouteSecurityTest extends TestCase
             'campaign-platforms.index',
             'briefs.index',
             'reports.index',
+            'report-platform-sections.ai-comments.update',
+            'reports.ai-comments.regenerate',
         ];
 
         foreach ($namedRoutes as $name) {

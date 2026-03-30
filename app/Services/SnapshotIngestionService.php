@@ -39,8 +39,17 @@ class SnapshotIngestionService
         $ids = [];
         $cpIds = collect();
         $lastSnapshot = null;
+        $campaignPlatformIdsByAdId = $this->resolveCampaignPlatformIds(
+            collect($snapshots)
+                ->filter(fn (array $payload): bool => ($payload['granularity'] ?? null) === 'daily')
+                ->pluck('ad_id')
+                ->map(fn (mixed $adId): int => (int) $adId)
+                ->unique()
+                ->values()
+                ->all()
+        );
 
-        DB::transaction(function () use ($snapshots, &$ids, &$cpIds, &$lastSnapshot) {
+        DB::transaction(function () use ($snapshots, $campaignPlatformIdsByAdId, &$ids, &$cpIds, &$lastSnapshot) {
             foreach ($snapshots as $payload) {
                 $payload['pulled_at'] = now();
                 $payload['snapshot_date'] = $this->normalizeSnapshotDate($payload['snapshot_date']);
@@ -58,7 +67,7 @@ class SnapshotIngestionService
                 $ids[] = $snapshot->id;
 
                 if (($payload['granularity'] ?? null) === 'daily') {
-                    $cpId = $this->resolveCampaignPlatformId((int) $payload['ad_id']);
+                    $cpId = $campaignPlatformIdsByAdId[(int) $payload['ad_id']] ?? null;
                     if ($cpId) {
                         $cpIds->push($cpId);
                     }
@@ -128,9 +137,24 @@ class SnapshotIngestionService
 
     private function resolveCampaignPlatformId(int $adId): ?int
     {
-        $ad = Ad::with('adSet.campaignPlatform')->find($adId);
+        return $this->resolveCampaignPlatformIds([$adId])[$adId] ?? null;
+    }
 
-        return $ad?->adSet?->campaignPlatform?->id;
+    /**
+     * @return array<int, int>
+     */
+    private function resolveCampaignPlatformIds(array $adIds): array
+    {
+        if ($adIds === []) {
+            return [];
+        }
+
+        return Ad::query()
+            ->join('ad_sets', 'ad_sets.id', '=', 'ads.ad_set_id')
+            ->whereIn('ads.id', $adIds)
+            ->pluck('ad_sets.campaign_platform_id', 'ads.id')
+            ->mapWithKeys(fn (mixed $campaignPlatformId, mixed $adId): array => [(int) $adId => (int) $campaignPlatformId])
+            ->all();
     }
 
     private function normalizeSnapshotDate(mixed $value): string

@@ -2,11 +2,16 @@
 
 namespace Tests\Feature\Api\FormValidation;
 
+use App\Events\ReportCreated;
 use App\Models\Campaign;
+use App\Models\CampaignPlatform;
 use App\Models\Category;
 use App\Models\Client;
+use App\Models\Platform;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class ReportValidationTest extends TestCase
@@ -120,6 +125,43 @@ class ReportValidationTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJsonStructure(['data', 'meta']);
+    }
+
+    public function test_create_report_generates_platform_sections_for_active_campaign_platforms(): void
+    {
+        Event::fake([ReportCreated::class]);
+
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement('CREATE VIEW IF NOT EXISTS v_campaign_platform_totals AS SELECT NULL AS campaign_platform_id, NULL AS calc_ctr, NULL AS calc_cpm, NULL AS calc_cpc, NULL AS calc_cpa, NULL AS calc_cpl, NULL AS calc_vtr, NULL AS calc_frequency WHERE 0 = 1');
+        }
+
+        $platform = Platform::factory()->create();
+
+        $campaignPlatform = CampaignPlatform::create([
+            'campaign_id' => $this->campaign->id,
+            'platform_id' => $platform->id,
+            'budget' => 15000,
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/reports', [
+            'campaign_id' => $this->campaign->id,
+            'type' => 'mid',
+            'period_start' => '2026-04-01',
+            'period_end' => '2026-05-15',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonStructure(['data', 'meta']);
+
+        $reportId = $response->json('data.id');
+
+        $this->assertDatabaseHas('report_platform_sections', [
+            'report_id' => $reportId,
+            'platform_id' => $campaignPlatform->platform_id,
+        ]);
+
+        Event::assertDispatched(ReportCreated::class, fn (ReportCreated $event): bool => $event->reportId === $reportId);
     }
 
     public function test_update_report_allows_partial_data(): void

@@ -42,19 +42,19 @@ class CampaignPageController extends Controller
             : 0.0;
 
         try {
-            $platformTotals = DB::table('v_campaign_platform_totals as v')
-                ->join('campaign_platforms as cp', 'cp.id', '=', 'v.campaign_platform_id')
-                ->join('platforms as p', 'p.id', '=', 'v.platform_id')
-                ->where('v.campaign_id', $campaign->id)
-                ->selectRaw('v.campaign_platform_id')
+            $platformTotals = DB::table('campaign_platforms as cp')
+                ->join('platforms as p', 'p.id', '=', 'cp.platform_id')
+                ->leftJoin('v_campaign_platform_totals as v', 'v.campaign_platform_id', '=', 'cp.id')
+                ->where('cp.campaign_id', $campaign->id)
+                ->selectRaw('cp.id as campaign_platform_id')
                 ->selectRaw('p.name as platform_name')
-                ->selectRaw('v.budget')
-                ->selectRaw('v.budget_type')
+                ->selectRaw('cp.budget')
+                ->selectRaw('cp.budget_type')
                 ->selectRaw('cp.is_active')
                 ->selectRaw('COALESCE(v.total_spend, 0) as total_spend')
                 ->selectRaw('COALESCE(v.total_impressions, 0) as total_impressions')
                 ->selectRaw('COALESCE(v.total_clicks, 0) as total_clicks')
-                ->selectRaw('CASE WHEN COALESCE(v.total_impressions, 0) > 0 THEN ROUND(COALESCE(v.total_clicks, 0)::numeric / v.total_impressions * 100, 4) ELSE 0 END as calc_ctr')
+                ->selectRaw('CASE WHEN COALESCE(v.total_impressions, 0) > 0 THEN ROUND(COALESCE(v.total_clicks, 0)::numeric / COALESCE(v.total_impressions, 0) * 100, 4) ELSE 0 END as calc_ctr')
                 ->orderBy('p.name')
                 ->get();
         } catch (QueryException) {

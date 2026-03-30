@@ -8,7 +8,7 @@
             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-orange-300">Tableau de bord</p>
             <h1 class="mt-2 text-3xl font-semibold text-white">Bienvenue, {{ auth()->user()->name }}</h1>
             <p class="mt-2 max-w-2xl text-slate-300">
-                Base web en place. Prochaine etape: brancher la liste des campagnes et les KPI depuis l'API interne.
+                Vue d'ensemble des performances: KPIs agreges et dernieres campagnes actives de votre portefeuille.
             </p>
         </div>
 

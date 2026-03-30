@@ -13,12 +13,8 @@ class StoreBatchSnapshotsRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        return array_merge([
             'snapshots' => 'required|array|min:1|max:500',
-            'snapshots.*.ad_id' => 'required|exists:ads,id',
-            'snapshots.*.snapshot_date' => 'required|date',
-            'snapshots.*.granularity' => 'required|in:daily,cumulative',
-            'snapshots.*.source' => 'nullable|in:api,manual',
-        ];
+        ], StoreSnapshotRequest::snapshotRules('snapshots.*.'));
     }
 }

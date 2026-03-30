@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PlatformController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Internal\ReportPlatformSectionController;
 use App\Http\Controllers\Internal\SnapshotController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,14 @@ Route::prefix('internal/v1')
         Route::post('/snapshots/batch', [SnapshotController::class, 'storeBatch']);
         Route::post('/ad-sets/upsert', [SnapshotController::class, 'upsertAdSet']);
         Route::post('/ads/upsert', [SnapshotController::class, 'upsertAd']);
+        Route::patch(
+            '/report-platform-sections/{reportPlatformSection}/ai-comments',
+            [ReportPlatformSectionController::class, 'updateAiComments']
+        );
+        Route::get(
+            '/report-platform-sections/{reportPlatformSection}/ai-context',
+            [ReportPlatformSectionController::class, 'showAiContext']
+        );
         Route::patch('/platform-connections/{id}/sync-status', [SnapshotController::class, 'updateSyncStatus']);
         Route::get('/platform-connections/{id}/credentials', [SnapshotController::class, 'credentials']);
     });
@@ -40,6 +49,14 @@ Route::middleware(['auth:sanctum', 'role:admin,manager'])
         Route::apiResource('campaign-platforms', CampaignPlatformController::class);
         Route::apiResource('briefs', BriefController::class);
         Route::apiResource('reports', ReportController::class);
+        Route::patch(
+            '/report-platform-sections/{reportPlatformSection}/ai-comments',
+            [ReportController::class, 'updatePlatformSectionAiComments']
+        )->name('report-platform-sections.ai-comments.update');
+        Route::post(
+            '/reports/{report}/ai-comments/regenerate',
+            [ReportController::class, 'regenerateAiComments']
+        )->name('reports.ai-comments.regenerate');
 
         Route::get('/campaigns/{id}/dashboard', [CampaignController::class, 'dashboard']);
         Route::get('/campaigns/{id}/ads', [CampaignController::class, 'ads']);
