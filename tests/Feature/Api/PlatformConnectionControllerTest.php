@@ -157,4 +157,103 @@ class PlatformConnectionControllerTest extends TestCase
         $decryptedToken = PlatformConnection::query()->findOrFail($connectionId)->access_token;
         $this->assertSame($plainToken, $decryptedToken);
     }
+
+    public function test_manual_health_check_marks_connection_as_connected_when_oauth2_credentials_are_valid(): void
+    {
+        $user = User::factory()->admin()->create();
+        $platform = Platform::factory()->create();
+
+        Sanctum::actingAs($user);
+
+        $connection = PlatformConnection::query()->create([
+            'platform_id' => $platform->id,
+            'account_id' => 'acc-health-oauth',
+            'auth_type' => 'oauth2',
+            'access_token' => 'valid-access-token-123',
+            'token_expires_at' => now()->addHour(),
+            'is_connected' => false,
+            'error_count' => 3,
+            'last_error' => 'Previous API failure',
+            'created_by' => $user->id,
+        ]);
+
+        $response = $this->postJson(route('platform-connections.test-health', $connection));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('meta.status', 'tested')
+            ->assertJsonPath('meta.health_status', 'connected')
+            ->assertJsonPath('data.connection.id', $connection->id)
+            ->assertJsonPath('data.health.status', 'connected');
+
+        $this->assertDatabaseHas('platform_connections', [
+            'id' => $connection->id,
+            'is_connected' => true,
+            'error_count' => 0,
+            'last_error' => null,
+        ]);
+    }
+
+    public function test_manual_health_check_increments_error_count_for_invalid_api_key_connection(): void
+    {
+        $user = User::factory()->admin()->create();
+        $platform = Platform::factory()->create();
+
+        Sanctum::actingAs($user);
+
+        $connection = PlatformConnection::query()->create([
+            'platform_id' => $platform->id,
+            'account_id' => 'acc-health-api-key',
+            'auth_type' => 'api_key',
+            'api_key' => 'short',
+            'is_connected' => true,
+            'error_count' => 1,
+            'created_by' => $user->id,
+        ]);
+
+        $response = $this->postJson(route('platform-connections.test-health', $connection));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('meta.status', 'tested')
+            ->assertJsonPath('meta.health_status', 'failed')
+            ->assertJsonPath('data.health.status', 'failed');
+
+        $connection->refresh();
+
+        $this->assertSame(2, $connection->error_count);
+        $this->assertNotNull($connection->last_error);
+        $this->assertStringContainsString('API key format looks invalid', (string) $connection->last_error);
+    }
+
+    public function test_manual_health_check_fails_for_missing_service_account_credentials(): void
+    {
+        $user = User::factory()->admin()->create();
+        $platform = Platform::factory()->create();
+
+        Sanctum::actingAs($user);
+
+        $connection = PlatformConnection::query()->create([
+            'platform_id' => $platform->id,
+            'account_id' => 'acc-health-service-account',
+            'auth_type' => 'service_account',
+            'extra_credentials' => [],
+            'is_connected' => true,
+            'error_count' => 0,
+            'created_by' => $user->id,
+        ]);
+
+        $response = $this->postJson(route('platform-connections.test-health', $connection));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('meta.health_status', 'failed')
+            ->assertJsonPath('data.health.status', 'failed')
+            ->assertJsonPath('data.connection.id', $connection->id);
+
+        $this->assertDatabaseHas('platform_connections', [
+            'id' => $connection->id,
+            'error_count' => 1,
+        ]);
+    }
 }

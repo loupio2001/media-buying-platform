@@ -33,6 +33,7 @@ class RouteSecurityTest extends TestCase
         $namedRoutes = [
             'platforms.index',
             'platform-connections.index',
+            'platform-connections.test-health',
             'clients.index',
             'campaigns.index',
             'campaign-platforms.index',

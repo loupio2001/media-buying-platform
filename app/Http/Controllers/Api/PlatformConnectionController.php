@@ -50,4 +50,20 @@ class PlatformConnectionController extends ApiController
 
         return $this->respond(['id' => $platformConnection->id], ['status' => 'deleted']);
     }
+
+    public function testHealth(PlatformConnection $platformConnection): JsonResponse
+    {
+        $result = $this->service->testHealth($platformConnection);
+
+        return $this->respond(
+            [
+                'connection' => $result['connection'],
+                'health' => $result['health'],
+            ],
+            [
+                'status' => 'tested',
+                'health_status' => $result['health']['status'],
+            ]
+        );
+    }
 }

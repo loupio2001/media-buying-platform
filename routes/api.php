@@ -45,6 +45,10 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin,manager'])
     ->group(function () {
         Route::apiResource('platforms', PlatformController::class);
+        Route::post(
+            '/platform-connections/{platformConnection}/test-health',
+            [PlatformConnectionController::class, 'testHealth']
+        )->name('platform-connections.test-health');
         Route::apiResource('platform-connections', PlatformConnectionController::class);
         Route::apiResource('clients', ClientController::class);
         Route::apiResource('campaigns', CampaignController::class);
