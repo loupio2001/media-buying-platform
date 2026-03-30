@@ -140,7 +140,14 @@ class BaseCollector(ABC):
                 self.platform_name,
                 campaign_platform_id,
             )
-            return {"ad_sets": 0, "ads": 0, "snapshots": 0}
+            return {
+                "ad_sets": 0,
+                "ads": 0,
+                "snapshots": 0,
+                "processed_rows": 0,
+                "skipped_rows": 0,
+                "failed_rows": 0,
+            }
 
         snapshot_payloads: list[dict[str, Any]] = []
         ad_set_id_map: dict[str, int] = {}

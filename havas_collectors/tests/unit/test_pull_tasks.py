@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
+
+import pytest
 
 from havas_collectors.tasks import pull_tasks
 
@@ -11,10 +12,7 @@ class _FakeCollector:
         self.laravel_client = laravel_client
         self.closed = False
         self.collect_calls: list[dict[str, Any]] = []
-
-    def collect(self, **kwargs: Any) -> dict[str, int]:
-        self.collect_calls.append(kwargs)
-        return {
+        self.summary = {
             "ad_sets": 1,
             "ads": 2,
             "snapshots": 3,
@@ -22,6 +20,10 @@ class _FakeCollector:
             "skipped_rows": 0,
             "failed_rows": 0,
         }
+
+    def collect(self, **kwargs: Any) -> dict[str, int]:
+        self.collect_calls.append(kwargs)
+        return self.summary
 
     def close(self) -> None:
         self.closed = True
@@ -108,3 +110,66 @@ def test_pull_single_campaign_platform_uses_credentials_and_updates_sync(monkeyp
         {"connection_id": 7, "success": True, "error_msg": None}
     ]
     assert fake_collector.closed is True
+
+
+def test_pull_single_campaign_platform_treats_zero_rows_as_success(monkeypatch) -> None:
+    fake_laravel = _FakeLaravelClient()
+    fake_collector = _FakeCollector(fake_laravel)
+    fake_collector.summary = {
+        "ad_sets": 0,
+        "ads": 0,
+        "snapshots": 0,
+        "processed_rows": 0,
+        "skipped_rows": 0,
+        "failed_rows": 0,
+    }
+
+    monkeypatch.setattr(pull_tasks, "_build_laravel_client", lambda: fake_laravel)
+    monkeypatch.setitem(pull_tasks.COLLECTOR_MAP, "meta", lambda laravel_client: fake_collector)
+
+    summary = pull_tasks.pull_single_campaign_platform.run(
+        campaign_platform_id=42,
+        platform_slug="meta",
+        external_campaign_id="cmp-42",
+        connection_id=7,
+        account_id="fallback-account",
+    )
+
+    assert summary["processed_rows"] == 0
+    assert fake_laravel.updated_status == [
+        {"connection_id": 7, "success": True, "error_msg": None}
+    ]
+
+
+def test_pull_single_campaign_platform_marks_partial_failures_as_failure(monkeypatch) -> None:
+    fake_laravel = _FakeLaravelClient()
+    fake_collector = _FakeCollector(fake_laravel)
+    fake_collector.summary = {
+        "ad_sets": 1,
+        "ads": 2,
+        "snapshots": 2,
+        "processed_rows": 2,
+        "skipped_rows": 0,
+        "failed_rows": 1,
+    }
+
+    monkeypatch.setattr(pull_tasks, "_build_laravel_client", lambda: fake_laravel)
+    monkeypatch.setitem(pull_tasks.COLLECTOR_MAP, "meta", lambda laravel_client: fake_collector)
+    monkeypatch.setattr(
+        pull_tasks.pull_single_campaign_platform,
+        "retry",
+        lambda exc: (_ for _ in ()).throw(exc),
+    )
+
+    with pytest.raises(RuntimeError, match="failed rows"):
+        pull_tasks.pull_single_campaign_platform.run(
+            campaign_platform_id=42,
+            platform_slug="meta",
+            external_campaign_id="cmp-42",
+            connection_id=7,
+            account_id="fallback-account",
+        )
+
+    assert fake_laravel.updated_status == [
+        {"connection_id": 7, "success": False, "error_msg": "Collector had failed rows for campaign_platform_id=42"}
+    ]

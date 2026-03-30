@@ -112,6 +112,11 @@ def pull_single_campaign_platform(
             campaign_platform_id=campaign_platform_id,
         )
 
+        if summary["failed_rows"] > 0:
+            raise RuntimeError(
+                f"Collector had failed rows for campaign_platform_id={campaign_platform_id}"
+            )
+
         if summary["snapshots"] <= 0 and summary["processed_rows"] > 0:
             raise RuntimeError(
                 f"Collector produced rows but no snapshots for campaign_platform_id={campaign_platform_id}"

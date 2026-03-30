@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
 from typing import Any
@@ -66,17 +67,21 @@ class MetaCollector(BaseCollector):
             "access_token": self._access_token,
             "level": "ad",
             "time_increment": 1,
-            "time_range": {
-                "since": date_from.isoformat(),
-                "until": date_to.isoformat(),
-            },
-            "filtering": [
+            "time_range": json.dumps(
                 {
-                    "field": "campaign.id",
-                    "operator": "EQUAL",
-                    "value": external_campaign_id,
+                    "since": date_from.isoformat(),
+                    "until": date_to.isoformat(),
                 }
-            ],
+            ),
+            "filtering": json.dumps(
+                [
+                    {
+                        "field": "campaign.id",
+                        "operator": "EQUAL",
+                        "value": external_campaign_id,
+                    }
+                ]
+            ),
             "fields": ",".join(
                 [
                     "campaign_id",
