@@ -66,3 +66,8 @@ Always consult this file before creating or modifying any database-related code.
 - docs/copilot-03-models-relationships.md — All Eloquent models, traits, relationships
 - docs/copilot-04-services-logic.md — Services, observers, events, listeners, commands
 - docs/copilot-05-python-collectors.md — Python project structure, Celery, collectors, AI
+
+## Workflow Rule
+- Maintain and update a task TODO list while working.
+- Every time a unit of work is finished, immediately commit the completed changes with a clear scoped message.
+- After each commit, re-check and update the TODO list before starting the next unit of work.

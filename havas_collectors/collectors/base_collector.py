@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -142,8 +143,11 @@ class BaseCollector(ABC):
             return {"ad_sets": 0, "ads": 0, "snapshots": 0}
 
         snapshot_payloads: list[dict[str, Any]] = []
-        ad_set_count = 0
-        ad_count = 0
+        ad_set_id_map: dict[str, int] = {}
+        ad_id_map: dict[tuple[int, str], int] = {}
+        processed_rows = 0
+        skipped_rows = 0
+        failed_rows = 0
 
         for raw_row in raw_rows:
             try:
@@ -154,18 +158,30 @@ class BaseCollector(ABC):
                         self.platform_name,
                         campaign_platform_id,
                     )
+                    skipped_rows += 1
                     continue
 
-                ad_set_id = self.laravel_client.upsert_ad_set(
-                    self._build_ad_set_payload(campaign_platform_id, normalized)
+                ad_set_id = self._get_or_create(
+                    cache=ad_set_id_map,
+                    cache_key=normalized.ad_set_external_id,
+                    factory=lambda: self.laravel_client.upsert_ad_set(
+                        self._build_ad_set_payload(campaign_platform_id, normalized)
+                    ),
                 )
-                ad_set_count += 1
 
-                ad_id = self.laravel_client.upsert_ad(self._build_ad_payload(ad_set_id, normalized))
-                ad_count += 1
+                ad_cache_key = (ad_set_id, normalized.ad_external_id)
+                ad_id = self._get_or_create(
+                    cache=ad_id_map,
+                    cache_key=ad_cache_key,
+                    factory=lambda: self.laravel_client.upsert_ad(
+                        self._build_ad_payload(ad_set_id, normalized)
+                    ),
+                )
 
                 snapshot_payloads.append(self._build_snapshot_payload(ad_id, normalized))
+                processed_rows += 1
             except Exception:
+                failed_rows += 1
                 LOGGER.exception(
                     "Failed to normalize/upsert row platform=%s campaign_platform_id=%s",
                     self.platform_name,
@@ -178,18 +194,38 @@ class BaseCollector(ABC):
                 chunk = snapshot_payloads[index : index + self.snapshot_batch_size]
                 inserted_ids.extend(self.laravel_client.post_snapshots_batch(chunk))
 
+        if raw_rows and not inserted_ids and failed_rows > 0:
+            raise RuntimeError(
+                f"No snapshots were persisted for platform={self.platform_name} "
+                f"campaign_platform_id={campaign_platform_id}"
+            )
+
+        if failed_rows > 0:
+            LOGGER.warning(
+                "Collector completed with row failures platform=%s campaign_platform_id=%s failed_rows=%s",
+                self.platform_name,
+                campaign_platform_id,
+                failed_rows,
+            )
+
         LOGGER.info(
-            "Collector success platform=%s campaign_platform_id=%s ad_sets=%s ads=%s snapshots=%s",
+            "Collector success platform=%s campaign_platform_id=%s ad_sets=%s ads=%s snapshots=%s processed_rows=%s skipped_rows=%s failed_rows=%s",
             self.platform_name,
             campaign_platform_id,
-            ad_set_count,
-            ad_count,
+            len(ad_set_id_map),
+            len(ad_id_map),
             len(inserted_ids),
+            processed_rows,
+            skipped_rows,
+            failed_rows,
         )
         return {
-            "ad_sets": ad_set_count,
-            "ads": ad_count,
+            "ad_sets": len(ad_set_id_map),
+            "ads": len(ad_id_map),
             "snapshots": len(inserted_ids),
+            "processed_rows": processed_rows,
+            "skipped_rows": skipped_rows,
+            "failed_rows": failed_rows,
         }
 
     def _build_ad_set_payload(
@@ -267,6 +303,18 @@ class BaseCollector(ABC):
 
     def close(self) -> None:
         self._http_client.close()
+
+    def _get_or_create[TKey](
+        self,
+        *,
+        cache: dict[TKey, int],
+        cache_key: TKey,
+        factory: Callable[[], int],
+    ) -> int:
+        if cache_key not in cache:
+            cache[cache_key] = factory()
+
+        return cache[cache_key]
 
     def _normalize_status(self, value: str | None) -> str | None:
         if not value:
