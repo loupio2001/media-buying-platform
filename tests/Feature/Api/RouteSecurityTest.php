@@ -18,6 +18,7 @@ class RouteSecurityTest extends TestCase
             'api/internal/v1/report-platform-sections/{reportPlatformSection}/ai-context',
             'api/internal/v1/platform-connections/{id}/sync-status',
             'api/internal/v1/platform-connections/{id}/credentials',
+            'api/internal/v1/platform-connections/{id}/refresh-token',
         ];
 
         foreach ($internalUris as $uri) {

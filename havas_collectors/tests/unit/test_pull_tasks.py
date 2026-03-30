@@ -32,6 +32,12 @@ class _FakeCollector:
 class _FakeLaravelClient:
     def __init__(self) -> None:
         self.updated_status: list[dict[str, Any]] = []
+        self.refresh_calls: list[dict[str, Any]] = []
+        self.refresh_result: dict[str, Any] = {"status": "ok", "refreshed": False}
+
+    def refresh_connection_token(self, connection_id: int, *, force: bool = False) -> dict[str, Any]:
+        self.refresh_calls.append({"connection_id": connection_id, "force": force})
+        return self.refresh_result
 
     def get_connection_credentials(self, connection_id: int) -> dict[str, Any]:
         return {
@@ -104,6 +110,7 @@ def test_pull_single_campaign_platform_uses_credentials_and_updates_sync(monkeyp
     )
 
     assert summary["snapshots"] == 3
+    assert fake_laravel.refresh_calls == [{"connection_id": 7, "force": False}]
     assert fake_collector.collect_calls[0]["account_id"] == "from-credentials"
     assert fake_collector.collect_calls[0]["credentials"]["developer_token"] == "dev-token"
     assert fake_laravel.updated_status == [
@@ -172,4 +179,39 @@ def test_pull_single_campaign_platform_marks_partial_failures_as_failure(monkeyp
 
     assert fake_laravel.updated_status == [
         {"connection_id": 7, "success": False, "error_msg": "Collector had failed rows for campaign_platform_id=42"}
+    ]
+
+
+def test_pull_single_campaign_platform_fails_when_token_refresh_fails(monkeypatch) -> None:
+    fake_laravel = _FakeLaravelClient()
+    fake_laravel.refresh_result = {
+        "status": "failed",
+        "last_error": "Token refresh failed: invalid_grant",
+    }
+    fake_collector = _FakeCollector(fake_laravel)
+
+    monkeypatch.setattr(pull_tasks, "_build_laravel_client", lambda: fake_laravel)
+    monkeypatch.setitem(pull_tasks.COLLECTOR_MAP, "meta", lambda laravel_client: fake_collector)
+    monkeypatch.setattr(
+        pull_tasks.pull_single_campaign_platform,
+        "retry",
+        lambda exc: (_ for _ in ()).throw(exc),
+    )
+
+    with pytest.raises(RuntimeError, match="Token refresh failed"):
+        pull_tasks.pull_single_campaign_platform.run(
+            campaign_platform_id=42,
+            platform_slug="meta",
+            external_campaign_id="cmp-42",
+            connection_id=7,
+            account_id="fallback-account",
+        )
+
+    assert fake_collector.collect_calls == []
+    assert fake_laravel.updated_status == [
+        {
+            "connection_id": 7,
+            "success": False,
+            "error_msg": "Token refresh failed for connection_id=7: Token refresh failed: invalid_grant",
+        }
     ]

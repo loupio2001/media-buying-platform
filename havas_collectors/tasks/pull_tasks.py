@@ -92,6 +92,12 @@ def pull_single_campaign_platform(
         credentials: dict[str, Any] = {}
         resolved_account_id = account_id
         if connection_id is not None:
+            refresh_result = laravel_client.refresh_connection_token(connection_id)
+            if str(refresh_result.get("status") or "") == "failed":
+                raise RuntimeError(
+                    f"Token refresh failed for connection_id={connection_id}: {refresh_result.get('last_error') or 'unknown error'}"
+                )
+
             credentials = _merge_credentials(laravel_client.get_connection_credentials(connection_id))
             resolved_account_id = str(credentials.get("account_id") or account_id)
 

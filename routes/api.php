@@ -31,6 +31,7 @@ Route::prefix('internal/v1')
         );
         Route::patch('/platform-connections/{id}/sync-status', [SnapshotController::class, 'updateSyncStatus']);
         Route::get('/platform-connections/{id}/credentials', [SnapshotController::class, 'credentials']);
+        Route::post('/platform-connections/{id}/refresh-token', [SnapshotController::class, 'refreshToken']);
     });
 
 Route::prefix('auth')->group(function () {

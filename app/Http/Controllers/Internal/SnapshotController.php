@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Internal;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Internal\RefreshConnectionTokenRequest;
 use App\Http\Requests\Internal\StoreBatchSnapshotsRequest;
 use App\Http\Requests\Internal\StoreSnapshotRequest;
 use App\Http\Requests\Internal\UpdateSyncStatusRequest;
@@ -86,6 +87,16 @@ class SnapshotController extends Controller
 
         return response()->json([
             'data' => $credentials,
+            'meta' => ['status' => 'ok'],
+        ], 200);
+    }
+
+    public function refreshToken(int $id, RefreshConnectionTokenRequest $request): JsonResponse
+    {
+        $result = $this->service->refreshConnectionToken($id, (bool) $request->boolean('force'));
+
+        return response()->json([
+            'data' => $result,
             'meta' => ['status' => 'ok'],
         ], 200);
     }

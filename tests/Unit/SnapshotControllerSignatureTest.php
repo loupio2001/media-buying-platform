@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Http\Controllers\Internal\SnapshotController;
+use App\Http\Requests\Internal\RefreshConnectionTokenRequest;
 use App\Http\Requests\Internal\StoreBatchSnapshotsRequest;
 use App\Http\Requests\Internal\StoreSnapshotRequest;
 use App\Http\Requests\Internal\UpdateSyncStatusRequest;
@@ -21,6 +22,7 @@ class SnapshotControllerSignatureTest extends TestCase
             'upsertAdSet' => UpsertAdSetRequest::class,
             'upsertAd' => UpsertAdRequest::class,
             'updateSyncStatus' => UpdateSyncStatusRequest::class,
+            'refreshToken' => RefreshConnectionTokenRequest::class,
         ];
 
         foreach ($expected as $method => $requestClass) {

@@ -66,6 +66,14 @@ class LaravelInternalClient:
         payload = self._request("GET", f"platform-connections/{connection_id}/credentials")
         return payload.get("data", {})
 
+    def refresh_connection_token(self, connection_id: int, *, force: bool = False) -> dict[str, Any]:
+        payload = self._request(
+            "POST",
+            f"platform-connections/{connection_id}/refresh-token",
+            json_body={"force": force},
+        )
+        return payload.get("data", {})
+
     def get_report_platform_section_commentary_context(
         self,
         report_platform_section_id: int,

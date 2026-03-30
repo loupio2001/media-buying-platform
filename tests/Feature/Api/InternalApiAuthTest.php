@@ -25,4 +25,13 @@ class InternalApiAuthTest extends TestCase
             ->assertJsonPath('data', null)
             ->assertJsonPath('meta.error', 'Unauthorized');
     }
+
+    public function test_internal_refresh_endpoint_rejects_request_without_token(): void
+    {
+        $response = $this->postJson('/api/internal/v1/platform-connections/1/refresh-token', []);
+
+        $response->assertStatus(401)
+            ->assertJsonPath('data', null)
+            ->assertJsonPath('meta.error', 'Unauthorized');
+    }
 }

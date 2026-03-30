@@ -7,11 +7,16 @@ use App\Models\Ad;
 use App\Models\AdSet;
 use App\Models\AdSnapshot;
 use App\Models\PlatformConnection;
+use App\Services\PlatformOAuth\PlatformConnectionTokenRefreshService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class SnapshotIngestionService
 {
+    public function __construct(private PlatformConnectionTokenRefreshService $tokenRefreshService)
+    {
+    }
+
     public function upsertSnapshot(array $data): array
     {
         $data['pulled_at'] = now();
@@ -129,9 +134,21 @@ class SnapshotIngestionService
             'auth_type' => $connection->auth_type,
             'access_token' => $connection->access_token,
             'refresh_token' => $connection->refresh_token,
+            'token_expires_at' => optional($connection->token_expires_at)?->toIso8601String(),
             'api_key' => $connection->api_key,
             'extra_credentials' => $connection->extra_credentials,
             'scopes' => $connection->scopes,
+        ];
+    }
+
+    public function refreshConnectionToken(int $id, bool $force = false): array
+    {
+        $connection = PlatformConnection::query()->with('platform')->findOrFail($id);
+        $result = $this->tokenRefreshService->refreshIfNeeded($connection, $force);
+
+        return [
+            'id' => $connection->id,
+            ...$result,
         ];
     }
 
