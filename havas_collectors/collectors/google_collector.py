@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import date
 from typing import Any
 
@@ -21,6 +22,15 @@ def _as_float(value: Any) -> float:
     return float(value)
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _normalize_customer_id(value: Any) -> str:
+    normalized = re.sub(r"\D", "", str(value or ""))
+    return normalized
+
+
 class GoogleAdsCollector(BaseCollector):
     @property
     def platform_name(self) -> str:
@@ -35,27 +45,29 @@ class GoogleAdsCollector(BaseCollector):
         )
 
     def authenticate(self, credentials: dict[str, Any]) -> None:
+        extra_credentials = _as_dict(credentials.get("extra_credentials"))
         access_token = str(credentials.get("access_token") or "")
         developer_token = str(
             credentials.get("developer_token")
-            or credentials.get("api_key")
-            or credentials.get("extra_credentials", {}).get("developer_token", "")
+            or extra_credentials.get("developer_token", "")
         )
         login_customer_id = str(
             credentials.get("login_customer_id")
-            or credentials.get("extra_credentials", {}).get("login_customer_id", "")
+            or extra_credentials.get("login_customer_id", "")
         )
 
         if not access_token or not developer_token:
             raise ValueError("Google credentials must include access_token and developer_token")
+
+        normalized_login_customer_id = _normalize_customer_id(login_customer_id)
 
         self._headers = {
             "Authorization": f"Bearer {access_token}",
             "developer-token": developer_token,
             "Content-Type": "application/json",
         }
-        if login_customer_id:
-            self._headers["login-customer-id"] = login_customer_id
+        if normalized_login_customer_id:
+            self._headers["login-customer-id"] = normalized_login_customer_id
 
     def fetch_ad_level_data(
         self,
@@ -64,7 +76,13 @@ class GoogleAdsCollector(BaseCollector):
         date_from: date,
         date_to: date,
     ) -> list[dict[str, Any]]:
-        url = self._api_url_template.format(account_id=account_id)
+        normalized_account_id = _normalize_customer_id(account_id)
+        normalized_campaign_id = _normalize_customer_id(external_campaign_id)
+
+        if not normalized_account_id or not normalized_campaign_id:
+            raise ValueError("Google account_id and external_campaign_id must be numeric identifiers")
+
+        url = self._api_url_template.format(account_id=normalized_account_id)
         query = (
             "SELECT "
             "campaign.id, campaign.name, campaign.advertising_channel_type, "
@@ -74,7 +92,7 @@ class GoogleAdsCollector(BaseCollector):
             "metrics.conversions, metrics.video_views, "
             "metrics.interactions, segments.date "
             "FROM ad_group_ad "
-            f"WHERE campaign.id = {external_campaign_id} "
+            f"WHERE campaign.id = {normalized_campaign_id} "
             f"AND segments.date BETWEEN '{date_from.isoformat()}' AND '{date_to.isoformat()}'"
         )
 
@@ -88,20 +106,24 @@ class GoogleAdsCollector(BaseCollector):
         rows: list[dict[str, Any]] = []
         if isinstance(response, list):
             for chunk in response:
+                if not isinstance(chunk, dict):
+                    continue
                 for item in chunk.get("results", []):
                     rows.append(item)
         elif isinstance(response, dict):
-            rows.extend(response.get("results", []))
+            results = response.get("results", [])
+            if isinstance(results, list):
+                rows.extend(results)
 
         return rows
 
     def normalize_record(self, raw_row: dict[str, Any]) -> NormalizedAdRecord:
-        campaign = raw_row.get("campaign", {})
-        ad_group = raw_row.get("ad_group", {})
-        ad_group_ad = raw_row.get("ad_group_ad", {})
-        ad = ad_group_ad.get("ad", {})
-        metrics = raw_row.get("metrics", {})
-        segments = raw_row.get("segments", {})
+        campaign = _as_dict(raw_row.get("campaign"))
+        ad_group = _as_dict(raw_row.get("ad_group"))
+        ad_group_ad = _as_dict(raw_row.get("ad_group_ad"))
+        ad = _as_dict(ad_group_ad.get("ad"))
+        metrics = _as_dict(raw_row.get("metrics"))
+        segments = _as_dict(raw_row.get("segments"))
 
         return NormalizedAdRecord(
             snapshot_date=to_casablanca_date(segments.get("date", date.today())),

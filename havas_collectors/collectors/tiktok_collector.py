@@ -21,6 +21,10 @@ def _as_float(value: Any) -> float:
     return float(value)
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 class TikTokCollector(BaseCollector):
     @property
     def platform_name(self) -> str:
@@ -51,49 +55,73 @@ class TikTokCollector(BaseCollector):
         date_from: date,
         date_to: date,
     ) -> list[dict[str, Any]]:
-        body = {
-            "advertiser_id": account_id,
-            "report_type": "BASIC",
-            "data_level": "AUCTION_AD",
-            "dimensions": ["ad_id", "adgroup_id", "stat_time_day"],
-            "metrics": [
-                "impressions",
-                "clicks",
-                "spend",
-                "conversions",
-                "reach",
-                "video_views_p25",
-                "video_views_p100",
-                "likes",
-                "comments",
-                "shares",
-            ],
-            "start_date": date_from.isoformat(),
-            "end_date": date_to.isoformat(),
-            "filtering": [
-                {
-                    "field_name": "campaign_id",
-                    "filter_type": "EQUAL",
-                    "filter_value": external_campaign_id,
-                }
-            ],
-        }
+        page = 1
+        rows: list[dict[str, Any]] = []
 
-        response = self.request_json(
-            "POST",
-            self._api_url,
-            headers=self._headers,
-            json_body=body,
-        )
-        if not isinstance(response, dict):
-            return []
+        while True:
+            body = {
+                "advertiser_id": account_id,
+                "report_type": "BASIC",
+                "data_level": "AUCTION_AD",
+                "dimensions": ["ad_id", "adgroup_id", "stat_time_day"],
+                "metrics": [
+                    "impressions",
+                    "clicks",
+                    "spend",
+                    "conversions",
+                    "reach",
+                    "video_views_p25",
+                    "video_views_p100",
+                    "likes",
+                    "comments",
+                    "shares",
+                ],
+                "start_date": date_from.isoformat(),
+                "end_date": date_to.isoformat(),
+                "page": page,
+                "page_size": 1000,
+                "filtering": [
+                    {
+                        "field_name": "campaign_id",
+                        "filter_type": "EQUAL",
+                        "filter_value": external_campaign_id,
+                    }
+                ],
+            }
 
-        data = response.get("data", {})
-        return list(data.get("list", []))
+            response = self.request_json(
+                "POST",
+                self._api_url,
+                headers=self._headers,
+                json_body=body,
+            )
+            if not isinstance(response, dict):
+                raise RuntimeError("TikTok API returned a non-object response")
+
+            code = response.get("code", 0)
+            if code not in (0, "0", None):
+                message = response.get("message") or response.get("msg") or "Unknown TikTok API error"
+                request_id = response.get("request_id") or "n/a"
+                raise RuntimeError(f"TikTok API error code={code} request_id={request_id}: {message}")
+
+            data = _as_dict(response.get("data"))
+            page_rows = data.get("list", [])
+            if isinstance(page_rows, list):
+                rows.extend(page_rows)
+
+            page_info = _as_dict(data.get("page_info"))
+            total_pages = int(page_info.get("total_page", page) or page)
+            has_next_page = bool(page_info.get("has_next_page", page < total_pages))
+            if not has_next_page or page >= total_pages:
+                break
+
+            page += 1
+
+        return rows
 
     def normalize_record(self, raw_row: dict[str, Any]) -> NormalizedAdRecord:
-        dimensions = raw_row.get("dimensions", {})
-        metrics = raw_row.get("metrics", {})
+        dimensions = _as_dict(raw_row.get("dimensions"))
+        metrics = _as_dict(raw_row.get("metrics"))
 
         likes = _as_int(metrics.get("likes"))
         comments = _as_int(metrics.get("comments"))
