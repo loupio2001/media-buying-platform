@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CampaignPlatformController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PlatformController;
+use App\Http\Controllers\Api\PlatformConnectionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Internal\ReportPlatformSectionController;
 use App\Http\Controllers\Internal\SnapshotController;
@@ -44,6 +45,7 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin,manager'])
     ->group(function () {
         Route::apiResource('platforms', PlatformController::class);
+        Route::apiResource('platform-connections', PlatformConnectionController::class);
         Route::apiResource('clients', ClientController::class);
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('campaign-platforms', CampaignPlatformController::class);
