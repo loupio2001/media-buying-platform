@@ -124,3 +124,59 @@ class LaravelInternalClient:
 
     def close(self) -> None:
         self._client.close()
+
+    # ------------------------------------------------------------------
+    # Brief endpoints (used by ai_tasks.analyze_brief_task)
+    # ------------------------------------------------------------------
+
+    def get_brief(self, brief_id: int) -> dict[str, Any]:
+        """Fetch a brief record including raw text, category, budget, and platform IDs.
+
+        Laravel endpoint: GET /internal/v1/briefs/{id}
+        """
+        payload = self._request("GET", f"briefs/{brief_id}")
+        return payload.get("data", {})
+
+    def post_brief_ai_analysis(
+        self,
+        brief_id: int,
+        analysis: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Persist AI analysis results for a brief.
+
+        Laravel endpoint: POST /internal/v1/briefs/{id}/ai-analysis
+        """
+        payload = self._request(
+            "POST",
+            f"briefs/{brief_id}/ai-analysis",
+            json_body=analysis,
+        )
+        return payload.get("data", {})
+
+    # ------------------------------------------------------------------
+    # Report endpoints (used by ai_tasks.generate_report_commentary_task)
+    # ------------------------------------------------------------------
+
+    def get_report(self, report_id: int) -> dict[str, Any]:
+        """Fetch a report record including aggregated metrics and campaign context.
+
+        Laravel endpoint: GET /internal/v1/reports/{id}
+        """
+        payload = self._request("GET", f"reports/{report_id}")
+        return payload.get("data", {})
+
+    def post_report_commentary(
+        self,
+        report_id: int,
+        commentary: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Persist AI-generated commentary for a report.
+
+        Laravel endpoint: POST /internal/v1/reports/{id}/commentary
+        """
+        payload = self._request(
+            "POST",
+            f"reports/{report_id}/commentary",
+            json_body=commentary,
+        )
+        return payload.get("data", {})

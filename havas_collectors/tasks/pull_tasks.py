@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from havas_collectors.api.laravel_client import LaravelInternalClient
-from havas_collectors.collectors import GoogleAdsCollector, MetaCollector, TikTokCollector
+from havas_collectors.collectors import GoogleAdsCollector, MetaCollector, TikTokCollector, YouTubeCollector
 from havas_collectors.db.reader import get_active_campaign_platforms
 from havas_collectors.tasks.celery_app import app
 
@@ -16,6 +16,7 @@ COLLECTOR_MAP = {
     "google": GoogleAdsCollector,
     "meta": MetaCollector,
     "tiktok": TikTokCollector,
+    "youtube": YouTubeCollector,
 }
 
 

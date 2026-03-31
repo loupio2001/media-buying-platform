@@ -1,5 +1,7 @@
 """Celery tasks for scheduled collector pulls."""
 
-from havas_collectors.tasks import pull_tasks
+"""Celery tasks for scheduled collector pulls and AI analysis dispatch."""
 
-__all__ = ["pull_tasks"]
+from havas_collectors.tasks import ai_tasks, pull_tasks
+
+__all__ = ["ai_tasks", "pull_tasks"]

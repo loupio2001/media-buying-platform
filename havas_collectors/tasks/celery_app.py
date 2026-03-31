@@ -18,7 +18,7 @@ app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    imports=("havas_collectors.tasks.pull_tasks",),
+    imports=("havas_collectors.tasks.pull_tasks", "havas_collectors.tasks.ai_tasks"),
 )
 
 app.conf.beat_schedule = {

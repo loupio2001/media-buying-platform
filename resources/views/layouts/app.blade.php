@@ -3,6 +3,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>@yield('title', config('app.name', 'Havas Media Buying Platform'))</title>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
@@ -27,11 +28,29 @@
                             <a href="{{ route('web.campaigns.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
                                 Campaigns
                             </a>
+                            <a href="{{ route('web.reports.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
+                                Reports
+                            </a>
+                            <a href="{{ route('web.briefs.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
+                                Briefs
+                            </a>
+                            <a href="{{ route('web.clients.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
+                                Clients
+                            </a>
                             @if (auth()->user()->isAdmin() || auth()->user()->isManager())
                                 <a href="{{ route('web.platform-connections.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
                                     Connections
                                 </a>
                             @endif
+                            @if (auth()->user()->isAdmin())
+                                <a href="{{ route('web.admin.users.index') }}" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
+                                    Admin
+                                </a>
+                            @endif
+
+                            {{-- Notification bell --}}
+                            <x-notification-bell />
+
                             <form action="{{ route('logout') }}" method="POST">
                                 @csrf
                                 <button type="submit" class="rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">

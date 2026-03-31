@@ -1,0 +1,8 @@
+Build an analytical campaign performance comment with key strengths, risks, and actionable recommendations. Keep it concise and executive-ready.
+
+Campaign: {campaign_name}
+Platform: {platform}
+Reporting Period: {period}
+
+Input JSON:
+{metrics_json}

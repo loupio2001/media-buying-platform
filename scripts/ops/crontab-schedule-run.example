@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /var/www/media-buying-data
+
+# Run Laravel scheduler every minute
+* * * * * /usr/bin/php artisan schedule:run >> /var/log/havas/laravel-schedule.log 2>&1

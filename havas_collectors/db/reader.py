@@ -57,3 +57,35 @@ def get_active_campaign_platforms() -> list[dict[str, Any]]:
             {"supported_slugs": list(SUPPORTED_PLATFORM_SLUGS)},
         ).mappings().all()
         return [dict(row) for row in rows]
+
+
+def get_category_benchmarks(category_id: int, platform_id: int) -> list[dict[str, Any]]:
+    """Return benchmark rows for the given category/platform combination.
+
+    Used by :func:`havas_collectors.tasks.ai_tasks.analyze_brief_task` to
+    supply industry benchmarks to the Claude brief analysis prompt.
+
+    Args:
+        category_id:  Internal ``categories.id`` value.
+        platform_id:  Internal ``platforms.id`` value.
+
+    Returns:
+        List of dicts with keys ``metric``, ``min_value``, ``max_value``, ``unit``.
+        Returns an empty list when no benchmarks are configured.
+    """
+    query = text(
+        """
+        SELECT metric, min_value, max_value, unit
+        FROM category_benchmarks
+        WHERE category_id = :category_id
+          AND platform_id = :platform_id
+        ORDER BY metric
+        """
+    )
+
+    with ENGINE.connect() as connection:
+        rows = connection.execute(
+            query,
+            {"category_id": category_id, "platform_id": platform_id},
+        ).mappings().all()
+        return [dict(row) for row in rows]

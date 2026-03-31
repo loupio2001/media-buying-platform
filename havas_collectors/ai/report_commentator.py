@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -11,6 +12,58 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from havas_collectors.ai.providers import SUPPORTED_PROVIDERS, AiProvider, build_provider, default_model_for
 
 LOGGER = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Prompt template helpers
+# ---------------------------------------------------------------------------
+
+_PROMPTS_DIR: Path = Path(__file__).parent / "prompts"
+_COMMENTARY_TEMPLATE: str | None = None
+
+# Inline fallback — used when the prompts/ directory or file is not present.
+_COMMENTARY_TEMPLATE_FALLBACK: str = (
+    "Build an analytical campaign performance comment with key strengths, "
+    "risks, and actionable recommendations. Keep it concise and executive-ready.\n\n"
+    "Campaign: {campaign_name}\n"
+    "Platform: {platform}\n"
+    "Reporting Period: {period}\n\n"
+    "Input JSON:\n"
+    "{metrics_json}"
+)
+
+
+def _load_commentary_template() -> str:
+    """Load the report commentary user-prompt template from disk (cached after first read).
+
+    Falls back to ``_COMMENTARY_TEMPLATE_FALLBACK`` when the prompt file is
+    missing so the commentator continues to work in environments where the
+    ``prompts/`` directory has not been deployed yet.
+    """
+    global _COMMENTARY_TEMPLATE
+    if _COMMENTARY_TEMPLATE is None:
+        template_path = _PROMPTS_DIR / "report_commentary.txt"
+        try:
+            _COMMENTARY_TEMPLATE = template_path.read_text(encoding="utf-8")
+            LOGGER.debug("Loaded report commentary template from %s", template_path)
+        except FileNotFoundError:
+            LOGGER.warning(
+                "report_commentary.txt not found at %s — using inline fallback template",
+                template_path,
+            )
+            _COMMENTARY_TEMPLATE = _COMMENTARY_TEMPLATE_FALLBACK
+    return _COMMENTARY_TEMPLATE
+
+
+def _apply_template(template: str, placeholders: dict[str, str]) -> str:
+    """Replace ``{key}`` placeholders without conflicting with JSON curly braces.
+
+    Uses plain ``str.replace`` per key so that literal ``{`` / ``}`` characters
+    inside JSON blocks in the template are left untouched.
+    """
+    result = template
+    for key, value in placeholders.items():
+        result = result.replace(f"{{{key}}}", value)
+    return result
 
 
 class CommentaryRequest(BaseModel):
@@ -170,6 +223,7 @@ class ReportCommentator:
             return self._build_fallback(request, reason=f"{self.provider_name}_error")
 
     def _build_prompts(self, request: CommentaryRequest) -> tuple[str, str]:
+        # System prompt is static — it defines the JSON output contract.
         system_prompt = (
             "You are a senior media performance analyst. "
             "Use only the provided input metrics and context. "
@@ -181,6 +235,18 @@ class ReportCommentator:
             "confidence must be between 0 and 1."
         )
 
+        # Extract human-readable campaign/platform labels for the template.
+        campaign_name: str = str(
+            request.campaign_context.get("campaign_name")
+            or "N/A"
+        )
+        platform: str = str(
+            request.campaign_context.get("platform")
+            or request.campaign_context.get("platform_name")
+            or "N/A"
+        )
+
+        # Serialise the full analytics payload as the metrics block.
         user_payload = {
             "language": request.language,
             "tone": request.tone,
@@ -188,15 +254,22 @@ class ReportCommentator:
             "campaign_context": request.campaign_context,
             "metrics": request.metrics,
         }
+        metrics_json: str = json.dumps(user_payload, ensure_ascii=True, sort_keys=True)
 
-        user_prompt = (
-            "Build an analytical campaign comment with strengths, risks, and actionable recommendations. "
-            "Keep it concise and executive-ready. "
-            "Input JSON:\n"
-            f"{json.dumps(user_payload, ensure_ascii=True, sort_keys=True)}"
+        # Load template from file (cached); apply placeholder substitution.
+        template = _load_commentary_template()
+        user_prompt = _apply_template(
+            template,
+            {
+                "campaign_name": campaign_name,
+                "platform": platform,
+                "period": request.period,
+                "metrics_json": metrics_json,
+            },
         )
 
         return system_prompt, user_prompt
+
 
     def _parse_llm_response(self, raw_text: str) -> ReportCommentary:
         parsed_json = self._extract_json(raw_text)
