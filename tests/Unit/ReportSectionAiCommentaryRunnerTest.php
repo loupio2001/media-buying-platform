@@ -22,6 +22,7 @@ class ReportSectionAiCommentaryRunnerTest extends TestCase
         config()->set('services.internal_api_token', 'test-internal-token');
         config()->set('services.ai_report_commentary.python_binary', 'python3');
         config()->set('services.ai_report_commentary.module', 'havas_collectors.ai.report_platform_section_commentary');
+        config()->set('services.ai_report_commentary.api_url', '');
 
         Process::fake();
 
@@ -78,6 +79,7 @@ class ReportSectionAiCommentaryRunnerTest extends TestCase
         config()->set('services.internal_api_token', 'test-internal-token');
         config()->set('services.ai_report_commentary.python_binary', 'python3');
         config()->set('services.ai_report_commentary.module', 'havas_collectors.ai.report_platform_section_commentary');
+        config()->set('services.ai_report_commentary.api_url', '');
 
         Process::fake();
 

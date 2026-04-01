@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ReportPlatformSection;
+use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Support\Facades\Process;
 use InvalidArgumentException;
 
@@ -45,26 +46,42 @@ class ReportSectionAiCommentaryRunner
     public function runSections(array $sectionIds): int
     {
         $normalizedSectionIds = $this->normalizeSectionIds($sectionIds);
+        $primaryPythonBinary = $this->pythonBinary();
 
         if ($normalizedSectionIds === []) {
             throw new InvalidArgumentException('Provide at least one valid report section ID.');
         }
 
         foreach ($normalizedSectionIds as $sectionId) {
-            Process::path(base_path())
-                ->forever()
-                ->env($this->environment())
-                ->run($this->commandForSection($sectionId))
-                ->throw();
+            try {
+                $this->runSectionWithBinary($sectionId, $primaryPythonBinary);
+            } catch (ProcessFailedException $exception) {
+                $venvPythonBinary = $this->projectVenvPythonBinary();
+
+                if (! $this->shouldRetryWithProjectVenv($exception, $primaryPythonBinary, $venvPythonBinary)) {
+                    throw $exception;
+                }
+
+                $this->runSectionWithBinary($sectionId, $venvPythonBinary);
+            }
         }
 
         return count($normalizedSectionIds);
     }
 
-    private function commandForSection(int $sectionId): array
+    private function runSectionWithBinary(int $sectionId, string $pythonBinary): void
+    {
+        Process::path(base_path())
+            ->forever()
+            ->env($this->environment())
+            ->run($this->commandForSection($sectionId, $pythonBinary))
+            ->throw();
+    }
+
+    private function commandForSection(int $sectionId, string $pythonBinary): array
     {
         return [
-            $this->pythonBinary(),
+            $pythonBinary,
             '-m',
             $this->pythonModule(),
             (string) $sectionId,
@@ -119,6 +136,36 @@ class ReportSectionAiCommentaryRunner
     private function pythonBinary(): string
     {
         return trim((string) config('services.ai_report_commentary.python_binary', 'python')) ?: 'python';
+    }
+
+    private function projectVenvPythonBinary(): string
+    {
+        $windowsVenv = base_path('.venv/Scripts/python.exe');
+        if (is_file($windowsVenv)) {
+            return $windowsVenv;
+        }
+
+        $unixVenv = base_path('.venv/bin/python');
+        if (is_file($unixVenv)) {
+            return $unixVenv;
+        }
+
+        return '';
+    }
+
+    private function shouldRetryWithProjectVenv(
+        ProcessFailedException $exception,
+        string $primaryPythonBinary,
+        string $venvPythonBinary,
+    ): bool {
+        if ($venvPythonBinary === '' || $venvPythonBinary === $primaryPythonBinary) {
+            return false;
+        }
+
+        $errorOutput = $exception->result->errorOutput();
+
+        return str_contains($errorOutput, 'ModuleNotFoundError')
+            || str_contains($errorOutput, 'No module named');
     }
 
     private function pythonModule(): string
