@@ -10,9 +10,11 @@ use App\Models\Report;
 use App\Models\ReportPlatformSection;
 use App\Services\ReportGenerator;
 use App\Services\ReportSectionAiCommentaryRunner;
+use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class ReportApiService
 {
@@ -97,10 +99,23 @@ class ReportApiService
             ];
         }
 
-        return [
-            'report_id' => $report->id,
-            'count' => $this->reportSectionAiCommentaryRunner->runSections($sectionIds),
-        ];
+        try {
+            return [
+                'report_id' => $report->id,
+                'count' => $this->reportSectionAiCommentaryRunner->runSections($sectionIds),
+                'mode' => 'python',
+            ];
+        } catch (Throwable $exception) {
+            if (! $this->shouldFallbackToLocalCommentary($exception)) {
+                throw $exception;
+            }
+
+            return [
+                'report_id' => $report->id,
+                'count' => $this->generateLocalFallbackComments($report),
+                'mode' => 'local_fallback',
+            ];
+        }
     }
 
     public function getPlatformSectionAiContext(ReportPlatformSection $reportPlatformSection): array
@@ -243,5 +258,90 @@ class ReportApiService
     private function toIntOrNull(mixed $value): ?int
     {
         return $value === null ? null : (int) $value;
+    }
+
+    private function shouldFallbackToLocalCommentary(Throwable $exception): bool
+    {
+        if (! $exception instanceof ProcessFailedException) {
+            return false;
+        }
+
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'WinError 10106')
+            || str_contains($message, 'httpx.ConnectError')
+            || str_contains($message, 'httpcore.ConnectError');
+    }
+
+    private function generateLocalFallbackComments(Report $report): int
+    {
+        $sections = $report->platformSections()->with('platform')->get();
+
+        foreach ($sections as $section) {
+            $spend = (float) ($section->spend ?? 0);
+            $impressions = (int) ($section->impressions ?? 0);
+            $clicks = (int) ($section->clicks ?? 0);
+            $conversions = (int) ($section->conversions ?? 0);
+            $leads = (int) ($section->leads ?? 0);
+            $ctr = $section->ctr !== null
+                ? (float) $section->ctr
+                : ($impressions > 0 ? round(($clicks / $impressions) * 100, 2) : 0.0);
+
+            $highlights = [];
+            $concerns = [];
+            $actions = [];
+
+            if ($ctr >= 1.5) {
+                $highlights[] = sprintf('CTR solide a %.2f%% sur la periode.', $ctr);
+            }
+            if ($conversions > 0) {
+                $highlights[] = sprintf('Volume de conversions positif (%d).', $conversions);
+            }
+            if ($leads > 0) {
+                $highlights[] = sprintf('Generation de leads active (%d).', $leads);
+            }
+
+            if ($spend > 0 && $clicks <= 0) {
+                $concerns[] = 'Depense engagee sans clic detecte.';
+            }
+            if ($ctr < 0.6) {
+                $concerns[] = sprintf('CTR faible (%.2f%%), possible fatigue creative ou ciblage large.', $ctr);
+            }
+            if ($spend > 0 && $conversions <= 0) {
+                $concerns[] = 'Depense sans conversion observee sur la periode.';
+            }
+
+            if ($actions === []) {
+                $actions[] = 'Maintenir une revue hebdomadaire des creatives, audiences et placements pour proteger la performance.';
+            }
+
+            if ($highlights === []) {
+                $highlights[] = 'Donnees limitees: lecture prudente necessaire pour confirmer une tendance.';
+            }
+            if ($concerns === []) {
+                $concerns[] = 'Aucun risque critique detecte avec les metriques disponibles.';
+            }
+
+            $periodStart = $report->period_start?->toDateString() ?? '-';
+            $periodEnd = $report->period_end?->toDateString() ?? '-';
+            $platformName = $section->platform?->name ?? 'plateforme';
+
+            $section->update([
+                'ai_summary' => sprintf(
+                    'Commentaire genere en mode de secours local pour %s (%s a %s). Depense %.2f, clics %d, conversions %d.',
+                    $platformName,
+                    $periodStart,
+                    $periodEnd,
+                    $spend,
+                    $clicks,
+                    $conversions,
+                ),
+                'ai_highlights' => $highlights,
+                'ai_concerns' => $concerns,
+                'ai_suggested_action' => $actions[0],
+            ]);
+        }
+
+        return $sections->count();
     }
 }

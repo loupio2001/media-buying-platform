@@ -8,7 +8,9 @@ use App\Models\Report;
 use App\Models\ReportPlatformSection;
 use App\Models\User;
 use App\Services\ReportSectionAiCommentaryRunner;
+use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Process\Exceptions\ProcessFailedException;
 use Mockery;
 use Tests\TestCase;
 
@@ -88,5 +90,52 @@ class ReportAiCommentsRegenerateTest extends TestCase
             ->assertJsonPath('meta.status', 'regenerated')
             ->assertJsonPath('data.report_id', $report->id)
             ->assertJsonPath('data.count', 0);
+    }
+
+    public function test_regenerate_ai_comments_uses_local_fallback_when_python_process_fails(): void
+    {
+        $campaign = Campaign::factory()->create(['created_by' => $this->admin->id]);
+        $report = Report::query()->create([
+            'campaign_id' => $campaign->id,
+            'type' => 'mid',
+            'period_start' => '2026-04-01',
+            'period_end' => '2026-05-15',
+            'status' => 'draft',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $platform = Platform::factory()->create();
+        $section = ReportPlatformSection::query()->create([
+            'report_id' => $report->id,
+            'platform_id' => $platform->id,
+            'spend' => 1000,
+            'impressions' => 10000,
+            'clicks' => 120,
+            'conversions' => 4,
+        ]);
+
+        $processResult = Mockery::mock(ProcessResult::class);
+        $processResult->shouldReceive('command')->andReturn('python -m havas_collectors.ai.report_platform_section_commentary 6');
+        $processResult->shouldReceive('exitCode')->andReturn(1);
+        $processResult->shouldReceive('output')->andReturn('');
+        $processResult->shouldReceive('errorOutput')->andReturn('httpx.ConnectError: [WinError 10106]');
+
+        $runner = Mockery::mock(ReportSectionAiCommentaryRunner::class);
+        $runner->shouldReceive('runSections')
+            ->once()
+            ->andThrow(new ProcessFailedException($processResult));
+        $this->app->instance(ReportSectionAiCommentaryRunner::class, $runner);
+
+        $response = $this->postJson(route('reports.ai-comments.regenerate', $report));
+
+        $response->assertOk()
+            ->assertJsonPath('meta.status', 'regenerated')
+            ->assertJsonPath('data.report_id', $report->id)
+            ->assertJsonPath('data.count', 1)
+            ->assertJsonPath('data.mode', 'local_fallback');
+
+        $section->refresh();
+        $this->assertNotNull($section->ai_summary);
+        $this->assertNotNull($section->ai_suggested_action);
     }
 }
