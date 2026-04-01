@@ -1,12 +1,12 @@
-<div x-data="notificationBell()" x-init="init()" class="relative">
-    <button @click="open = !open" class="relative rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
+<div x-data="notificationBell()" x-init="init()" @keydown.escape.window="closePanel()" x-ref="root" class="relative">
+    <button @click.stop="togglePanel()" class="relative rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
         🔔
         <span x-show="unreadCount > 0" x-text="unreadCount"
             class="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-slate-950">
         </span>
     </button>
 
-    <div x-show="open" @click.outside="open = false"
+    <div x-show="open" x-cloak @click.stop
         class="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-700 bg-slate-900 shadow-xl">
         <div class="flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <p class="text-sm font-semibold text-slate-200">Notifications</p>
@@ -29,7 +29,7 @@
         </ul>
 
         <div class="border-t border-slate-800 px-4 py-2">
-            <a href="{{ route('web.notifications.index') }}" class="text-xs text-orange-300 hover:text-orange-200">
+            <a href="{{ route('web.notifications.index') }}" @click="closePanel()" class="text-xs text-orange-300 hover:text-orange-200">
                 View all notifications →
             </a>
         </div>
@@ -42,9 +42,37 @@
             open: false,
             unreadCount: 0,
             notifications: [],
+            pollTimer: null,
+            outsideClickHandler: null,
             async init() {
                 await this.fetchNotifications();
-                setInterval(() => this.fetchNotifications(), 60000);
+                this.pollTimer = setInterval(() => this.fetchNotifications(), 60000);
+                this.outsideClickHandler = (event) => {
+                    if (!this.open) {
+                        return;
+                    }
+
+                    if (!this.$refs.root.contains(event.target)) {
+                        this.closePanel();
+                    }
+                };
+                document.addEventListener('click', this.outsideClickHandler);
+            },
+            destroy() {
+                if (this.pollTimer) {
+                    clearInterval(this.pollTimer);
+                    this.pollTimer = null;
+                }
+                if (this.outsideClickHandler) {
+                    document.removeEventListener('click', this.outsideClickHandler);
+                    this.outsideClickHandler = null;
+                }
+            },
+            togglePanel() {
+                this.open = !this.open;
+            },
+            closePanel() {
+                this.open = false;
             },
             async fetchNotifications() {
                 try {
@@ -69,6 +97,7 @@
                     });
                     this.unreadCount = 0;
                     this.notifications = this.notifications.map(n => ({ ...n, is_read: true }));
+                    this.closePanel();
                 } catch (e) {}
             },
         };

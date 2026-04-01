@@ -6,6 +6,7 @@ use App\Http\Controllers\CampaignPageController;
 use App\Http\Controllers\PlatformConnectionOAuthController;
 use App\Http\Controllers\PlatformConnectionSettingsController;
 use App\Http\Controllers\Web\BriefWebController;
+use App\Http\Controllers\Web\CampaignWebController;
 use App\Http\Controllers\Web\ClientWebController;
 use App\Http\Controllers\Web\NotificationWebController;
 use App\Http\Controllers\Web\ReportWebController;
@@ -47,6 +48,10 @@ Route::middleware('auth')->group(function () {
 
     // Campaigns
     Route::get('/campaigns', CampaignListController::class)->name('web.campaigns.index');
+    Route::middleware('role:admin,manager')->group(function () {
+        Route::get('/campaigns/create', [CampaignWebController::class, 'create'])->name('web.campaigns.create');
+        Route::post('/campaigns', [CampaignWebController::class, 'store'])->name('web.campaigns.store');
+    });
     Route::get('/campaigns/{campaign}/trend.csv', [CampaignPageController::class, 'exportTrendCsv'])->name('web.campaigns.trend.csv');
     Route::get('/campaigns/{campaign}', CampaignPageController::class)->name('web.campaigns.show');
 
@@ -81,6 +86,10 @@ Route::middleware('auth')->group(function () {
             ->name('web.platform-connections.update');
         Route::delete('/settings/platform-connections/{platformConnection}', [PlatformConnectionSettingsController::class, 'destroy'])
             ->name('web.platform-connections.destroy');
+        Route::post('/settings/platform-connections/sync', [PlatformConnectionSettingsController::class, 'syncAll'])
+            ->name('web.platform-connections.sync-all');
+        Route::post('/settings/platform-connections/{platformConnection}/sync', [PlatformConnectionSettingsController::class, 'syncConnection'])
+            ->name('web.platform-connections.sync');
 
         Route::get(
             '/settings/platform-connections/{platform}/authorize',

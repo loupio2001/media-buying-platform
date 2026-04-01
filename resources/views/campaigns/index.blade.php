@@ -10,6 +10,11 @@
                 <h1 class="mt-2 text-3xl font-semibold text-white">Campaign list</h1>
                 <p class="mt-2 text-slate-300">Filter and browse recent campaigns.</p>
             </div>
+            @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                <a href="{{ route('web.campaigns.create') }}" class="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-orange-400">
+                    Create Campaign
+                </a>
+            @endif
         </div>
 
         <form method="GET" action="{{ route('web.campaigns.index') }}" class="grid gap-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4 sm:grid-cols-3">
