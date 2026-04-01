@@ -69,8 +69,27 @@ class ReportWebController extends Controller
 
             return response()->json([
                 'message' => 'Failed to regenerate AI comments.',
-                'error' => config('app.debug') ? $exception->getMessage() : null,
+                'error' => config('app.debug') ? $this->sanitizeErrorForJson($exception->getMessage()) : null,
             ], 500);
         }
+    }
+
+    private function sanitizeErrorForJson(string $message): string
+    {
+        $clean = preg_replace('/\x1B\[[0-9;]*[A-Za-z]/', '', $message) ?? $message;
+        $clean = str_replace(["\r\n", "\r"], "\n", $clean);
+
+        if (function_exists('mb_convert_encoding')) {
+            $clean = mb_convert_encoding($clean, 'UTF-8', 'UTF-8');
+        }
+
+        if (function_exists('iconv')) {
+            $converted = iconv('UTF-8', 'UTF-8//IGNORE', $clean);
+            if ($converted !== false) {
+                $clean = $converted;
+            }
+        }
+
+        return trim($clean);
     }
 }

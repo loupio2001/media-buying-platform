@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Api\ReportApiService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class WebReportAiCommentsRegenerateTest extends TestCase
@@ -65,5 +66,33 @@ class WebReportAiCommentsRegenerateTest extends TestCase
             ->postJson(route('web.reports.ai-comments.regenerate', $report));
 
         $response->assertForbidden();
+    }
+
+    public function test_web_route_returns_valid_json_when_exception_message_contains_invalid_utf8(): void
+    {
+        /** @var User $admin */
+        $admin = User::factory()->create(['role' => 'admin']);
+        $campaign = Campaign::factory()->create(['created_by' => $admin->id]);
+        $report = Report::query()->create([
+            'campaign_id' => $campaign->id,
+            'type' => 'weekly',
+            'period_start' => '2026-03-23',
+            'period_end' => '2026-03-29',
+            'status' => 'draft',
+            'created_by' => $admin->id,
+        ]);
+
+        $service = Mockery::mock(ReportApiService::class);
+        $service->shouldReceive('regenerateAiComments')
+            ->once()
+            ->andThrow(new RuntimeException("Invalid bytes: \xB1\x31"));
+        $this->app->instance(ReportApiService::class, $service);
+
+        $response = $this->actingAs($admin)
+            ->postJson(route('web.reports.ai-comments.regenerate', $report));
+
+        $response->assertStatus(500)
+            ->assertJsonPath('message', 'Failed to regenerate AI comments.')
+            ->assertJsonStructure(['message', 'error']);
     }
 }
