@@ -6,6 +6,7 @@ use App\Models\Platform;
 use App\Models\PlatformConnection;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
 class WebPlatformConnectionsTest extends TestCase
@@ -124,5 +125,76 @@ class WebPlatformConnectionsTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertDatabaseMissing('platform_connections', ['id' => $connection->id]);
+    }
+
+    public function test_admin_can_dispatch_manual_sync_for_all_platforms(): void
+    {
+        config()->set('app.url', 'https://example.test');
+        config()->set('services.internal_api_token', 'test-internal-token');
+        config()->set('services.ai_report_commentary.python_binary', 'python3');
+        Process::fake();
+
+        $admin = User::factory()->admin()->create();
+
+        $response = $this->actingAs($admin)
+            ->from(route('web.platform-connections.index'))
+            ->post(route('web.platform-connections.sync-all'));
+
+        $response
+            ->assertRedirect(route('web.platform-connections.index'))
+            ->assertSessionHas('status');
+
+        Process::assertRan(fn ($process): bool => $process->command === [
+            'python3',
+            '-c',
+            "from havas_collectors.tasks.celery_app import app; app.send_task('havas_collectors.tasks.pull_tasks.pull_all_active_campaigns')",
+        ]);
+    }
+
+    public function test_admin_can_dispatch_manual_sync_for_single_connection(): void
+    {
+        config()->set('app.url', 'https://example.test');
+        config()->set('services.internal_api_token', 'test-internal-token');
+        config()->set('services.ai_report_commentary.python_binary', 'python3');
+        Process::fake();
+
+        $admin = User::factory()->admin()->create();
+        $platform = Platform::query()->firstOrCreate(
+            ['slug' => 'meta'],
+            [
+                'name' => 'Meta',
+                'api_supported' => true,
+                'supports_reach' => true,
+                'supports_video_metrics' => true,
+                'supports_frequency' => true,
+                'supports_leads' => true,
+                'is_active' => true,
+                'sort_order' => 1,
+            ]
+        );
+        $connection = PlatformConnection::query()->create([
+            'platform_id' => $platform->id,
+            'account_id' => 'meta-account-99',
+            'account_name' => 'Meta Account 99',
+            'auth_type' => 'oauth2',
+            'access_token' => 'test-token',
+            'is_connected' => true,
+            'error_count' => 0,
+            'created_by' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->from(route('web.platform-connections.index'))
+            ->post(route('web.platform-connections.sync', $connection));
+
+        $response
+            ->assertRedirect(route('web.platform-connections.index'))
+            ->assertSessionHas('status');
+
+        Process::assertRan(fn ($process): bool => $process->command === [
+            'python3',
+            '-c',
+            "from havas_collectors.tasks.celery_app import app; app.send_task('havas_collectors.tasks.pull_tasks.pull_connection_campaigns', kwargs={'connection_id': {$connection->id}})",
+        ]);
     }
 }
