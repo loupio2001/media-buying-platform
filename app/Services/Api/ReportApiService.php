@@ -106,7 +106,7 @@ class ReportApiService
                 'mode' => 'python',
             ];
         } catch (Throwable $exception) {
-            if (! $this->shouldFallbackToLocalCommentary($exception)) {
+            if (! $this->allowLocalFallback() || ! $this->shouldFallbackToLocalCommentary($exception)) {
                 throw $exception;
             }
 
@@ -271,6 +271,11 @@ class ReportApiService
         return str_contains($message, 'WinError 10106')
             || str_contains($message, 'httpx.ConnectError')
             || str_contains($message, 'httpcore.ConnectError');
+    }
+
+    private function allowLocalFallback(): bool
+    {
+        return (bool) config('services.ai_report_commentary.allow_local_fallback', false);
     }
 
     private function generateLocalFallbackComments(Report $report): int

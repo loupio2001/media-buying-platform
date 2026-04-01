@@ -43,6 +43,8 @@ return [
         'python_binary' => env('PYTHON_BIN', 'python'),
         'module' => env('AI_REPORT_COMMENTARY_MODULE', 'havas_collectors.ai.report_platform_section_commentary'),
         'api_url' => env('LARAVEL_API_URL'),
+        'force_llm' => env('AI_FORCE_LLM', true),
+        'allow_local_fallback' => env('AI_ALLOW_LOCAL_FALLBACK', false),
     ],
 
     'meta_ads' => [
@@ -52,6 +54,17 @@ return [
         'scopes' => array_values(array_filter(array_map(
             static fn (string $scope): string => trim($scope),
             explode(',', (string) env('META_SCOPES', 'ads_read,ads_management'))
+        ))),
+    ],
+
+    'google_ads' => [
+        'client_id' => env('GOOGLE_ADS_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_ADS_CLIENT_SECRET'),
+        'developer_token' => env('GOOGLE_ADS_DEVELOPER_TOKEN'),
+        'redirect_uri' => env('GOOGLE_ADS_REDIRECT_URI'),
+        'scopes' => array_values(array_filter(array_map(
+            static fn (string $scope): string => trim($scope),
+            explode(',', (string) env('GOOGLE_ADS_SCOPES', 'https://www.googleapis.com/auth/adwords'))
         ))),
     ],
 

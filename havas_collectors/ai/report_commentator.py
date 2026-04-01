@@ -207,6 +207,18 @@ def _objective_playbook(objective: str, language: Literal["fr", "en"]) -> str:
     )
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 class ReportCommentator:
     """Generate campaign reporting commentary using selected AI provider with safe fallback."""
 
@@ -224,6 +236,7 @@ class ReportCommentator:
         self.model = (model or os.getenv("AI_MODEL") or default_model_for(self.provider_name)).strip()
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
+        self.force_llm = _env_flag("AI_FORCE_LLM", default=False)
         self._provider: AiProvider | None = None
         self._provider_error: str | None = None
 
@@ -259,9 +272,13 @@ class ReportCommentator:
         request = payload if isinstance(payload, CommentaryRequest) else CommentaryRequest.model_validate(payload)
 
         if self._provider is None:
+            if self.force_llm:
+                raise RuntimeError("LLM provider is unavailable and AI_FORCE_LLM is enabled.")
             return self._build_fallback(request, reason=f"{self.provider_name}_unavailable")
 
         if not self._provider.is_available:
+            if self.force_llm:
+                raise RuntimeError("AI_API_KEY is missing and AI_FORCE_LLM is enabled.")
             return self._build_fallback(request, reason=f"{self.provider_name}_unavailable")
 
         system_prompt, user_prompt = self._build_prompts(request)
@@ -270,9 +287,13 @@ class ReportCommentator:
             raw_text = self._provider.invoke(system_prompt=system_prompt, user_prompt=user_prompt)
             return self._parse_llm_response(raw_text)
         except (ValidationError, ValueError, json.JSONDecodeError) as error:
+            if self.force_llm:
+                raise RuntimeError(f"Invalid LLM output while AI_FORCE_LLM is enabled: {error}") from error
             LOGGER.warning("Invalid %s output, using fallback. reason=%s", self.provider_name, error)
             return self._build_fallback(request, reason="invalid_llm_output")
         except Exception as error:  # pragma: no cover - depends on network/SDK runtime.
+            if self.force_llm:
+                raise RuntimeError(f"{self.provider_name} call failed while AI_FORCE_LLM is enabled: {error}") from error
             LOGGER.exception("%s call failed, using fallback: %s", self.provider_name, error)
             return self._build_fallback(request, reason=f"{self.provider_name}_error")
 

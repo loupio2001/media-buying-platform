@@ -94,6 +94,8 @@ class ReportAiCommentsRegenerateTest extends TestCase
 
     public function test_regenerate_ai_comments_uses_local_fallback_when_python_process_fails(): void
     {
+        config()->set('services.ai_report_commentary.allow_local_fallback', true);
+
         $campaign = Campaign::factory()->create(['created_by' => $this->admin->id]);
         $report = Report::query()->create([
             'campaign_id' => $campaign->id,

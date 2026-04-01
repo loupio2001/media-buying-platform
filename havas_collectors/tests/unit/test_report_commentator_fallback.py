@@ -73,6 +73,28 @@ def test_generate_commentary_falls_back_for_unknown_provider(
     assert "unknown-provider_unavailable" in result.summary
 
 
+def test_generate_commentary_raises_when_force_llm_enabled_and_provider_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AI_API_KEY", raising=False)
+    monkeypatch.setenv("AI_FORCE_LLM", "1")
+
+    commentator = ReportCommentator(api_key="")
+    payload = {
+        "metrics": {
+            "impressions": 1000,
+            "clicks": 20,
+            "spend": 50.0,
+        },
+        "period": "2026-03-01 to 2026-03-30",
+        "language": "fr",
+        "tone": "analytical",
+    }
+
+    with pytest.raises(RuntimeError, match="AI_FORCE_LLM"):
+        commentator.generate_commentary(payload)
+
+
 @pytest.mark.parametrize(
     ("language", "objective", "expected_hint"),
     [

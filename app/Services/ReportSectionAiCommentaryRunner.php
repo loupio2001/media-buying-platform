@@ -109,6 +109,7 @@ class ReportSectionAiCommentaryRunner
         return [
             'LARAVEL_API_URL' => rtrim($apiUrl, '/'),
             'INTERNAL_API_TOKEN' => $internalApiToken,
+            'AI_FORCE_LLM' => config('services.ai_report_commentary.force_llm', true) ? '1' : '0',
             'NO_PROXY' => '*',
             'no_proxy' => '*',
             'HTTP_PROXY' => '',
