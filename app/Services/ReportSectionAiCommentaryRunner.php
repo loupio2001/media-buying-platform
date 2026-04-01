@@ -109,6 +109,11 @@ class ReportSectionAiCommentaryRunner
         return [
             'LARAVEL_API_URL' => rtrim($apiUrl, '/'),
             'INTERNAL_API_TOKEN' => $internalApiToken,
+            'NO_PROXY' => '*',
+            'no_proxy' => '*',
+            'HTTP_PROXY' => '',
+            'HTTPS_PROXY' => '',
+            'ALL_PROXY' => '',
         ];
     }
 

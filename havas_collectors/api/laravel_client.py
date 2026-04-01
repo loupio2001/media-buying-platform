@@ -30,13 +30,19 @@ class LaravelInternalClient:
         timeout_seconds: float = 30.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.Client(
-            timeout=httpx.Timeout(timeout_seconds),
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "X-Internal-Token": internal_token,
-            },
+        self._timeout_seconds = timeout_seconds
+        self._headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Internal-Token": internal_token,
+        }
+        self._client = self._build_client()
+
+    def _build_client(self) -> httpx.Client:
+        return httpx.Client(
+            timeout=httpx.Timeout(self._timeout_seconds),
+            headers=self._headers,
+            trust_env=False,
         )
 
     @retry(
@@ -52,11 +58,19 @@ class LaravelInternalClient:
         *,
         json_body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        response = self._client.request(
-            method=method,
-            url=f"{self.base_url}/{path.lstrip('/')}",
-            json=json_body,
-        )
+        try:
+            response = self._client.request(
+                method=method,
+                url=f"{self.base_url}/{path.lstrip('/')}",
+                json=json_body,
+            )
+        except httpx.NetworkError as error:
+            if "WinError 10106" in str(error):
+                LOGGER.warning("Reinitializing HTTP client after WinError 10106 on path=%s", path)
+                self._client.close()
+                self._client = self._build_client()
+            raise
+
         if response.status_code >= 400:
             LOGGER.warning("Laravel API error status=%s path=%s", response.status_code, path)
             response.raise_for_status()
