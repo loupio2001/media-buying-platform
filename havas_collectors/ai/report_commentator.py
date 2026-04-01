@@ -26,7 +26,10 @@ _COMMENTARY_TEMPLATE_FALLBACK: str = (
     "risks, and actionable recommendations. Keep it concise and executive-ready.\n\n"
     "Campaign: {campaign_name}\n"
     "Platform: {platform}\n"
+    "Campaign Objective: {objective}\n"
     "Reporting Period: {period}\n\n"
+    "Objective Playbook:\n"
+    "{objective_playbook}\n\n"
     "Input JSON:\n"
     "{metrics_json}"
 )
@@ -153,6 +156,57 @@ def _safe_ratio(numerator: float, denominator: float, factor: float = 1.0) -> fl
     return (numerator / denominator) * factor
 
 
+def _normalize_objective(raw_objective: Any) -> str:
+    if not isinstance(raw_objective, str):
+        return ""
+    return raw_objective.strip().lower().replace(" ", "_")
+
+
+def _objective_playbook(objective: str, language: Literal["fr", "en"]) -> str:
+    objective_key = _normalize_objective(objective)
+
+    if language == "fr":
+        if objective_key in {"awareness", "reach", "video_views"}:
+            return (
+                "Prioriser la couverture et la visibilite: reach, impressions, frequency, CPM, VTR. "
+                "Ne pas surponderer les conversions faibles si l'objectif est awareness."
+            )
+        if objective_key in {"traffic", "engagement"}:
+            return (
+                "Prioriser l'efficacite de trafic: clicks, link_clicks, CTR, CPC. "
+                "Identifier fatigue creative/ciblage si CTR baisse ou CPC grimpe."
+            )
+        if objective_key in {"conversions", "leads", "app_installs"}:
+            return (
+                "Prioriser la performance bas de funnel: conversions/leads, CPA/CPL, volume utile. "
+                "Signaler depense sans conversion comme risque majeur."
+            )
+        return (
+            "Adapter l'analyse a l'objectif annonce et aux KPI disponibles, "
+            "sans inferer des objectifs non fournis."
+        )
+
+    if objective_key in {"awareness", "reach", "video_views"}:
+        return (
+            "Prioritize coverage and visibility: reach, impressions, frequency, CPM, VTR. "
+            "Do not over-penalize low conversions when objective is awareness."
+        )
+    if objective_key in {"traffic", "engagement"}:
+        return (
+            "Prioritize traffic efficiency: clicks, link_clicks, CTR, CPC. "
+            "Flag creative fatigue/targeting issues when CTR drops or CPC rises."
+        )
+    if objective_key in {"conversions", "leads", "app_installs"}:
+        return (
+            "Prioritize lower-funnel outcomes: conversions/leads, CPA/CPL, usable volume. "
+            "Treat spend without conversions as a major risk."
+        )
+    return (
+        "Align analysis with the declared objective and available KPIs, "
+        "without assuming missing business goals."
+    )
+
+
 class ReportCommentator:
     """Generate campaign reporting commentary using selected AI provider with safe fallback."""
 
@@ -245,6 +299,8 @@ class ReportCommentator:
             or request.campaign_context.get("platform_name")
             or "N/A"
         )
+        objective: str = str(request.campaign_context.get("campaign_objective") or "unspecified")
+        objective_playbook = _objective_playbook(objective, request.language)
 
         # Serialise the full analytics payload as the metrics block.
         user_payload = {
@@ -263,6 +319,8 @@ class ReportCommentator:
             {
                 "campaign_name": campaign_name,
                 "platform": platform,
+                "objective": objective,
+                "objective_playbook": objective_playbook,
                 "period": request.period,
                 "metrics_json": metrics_json,
             },
@@ -303,6 +361,7 @@ class ReportCommentator:
 
     def _build_fallback(self, request: CommentaryRequest, *, reason: str) -> ReportCommentary:
         metrics = request.metrics
+        objective = _normalize_objective(request.campaign_context.get("campaign_objective"))
 
         impressions = metrics.get("impressions", 0.0)
         clicks = metrics.get("clicks", 0.0)
@@ -349,6 +408,25 @@ class ReportCommentator:
             if spend > 0 and conversions <= 0:
                 risks.append("Depense sans conversion observee sur la periode.")
 
+            if objective in {"awareness", "reach", "video_views"}:
+                if impressions <= 0:
+                    risks.append("Objectif awareness mais impressions nulles sur la periode.")
+                recommendations.append(
+                    "Optimiser la couverture (reach/frequency) et la qualite d'exposition avant de juger la conversion."
+                )
+            elif objective in {"traffic", "engagement"}:
+                if clicks <= 0:
+                    risks.append("Objectif trafic mais aucun clic detecte.")
+                recommendations.append(
+                    "Concentrer les optimisations sur CTR/CPC: creatives, ciblage et placements."
+                )
+            elif objective in {"conversions", "leads", "app_installs"}:
+                if conversions <= 0 and leads <= 0:
+                    risks.append("Objectif conversion/leads sans resultat bas de funnel.")
+                recommendations.append(
+                    "Prioriser les ensembles qui reduisent CPA/CPL et renforcent le volume de conversions utiles."
+                )
+
             if target_ctr is not None and ctr is not None and ctr < target_ctr:
                 recommendations.append(
                     f"Tester de nouveaux creatives pour rapprocher le CTR de la cible ({target_ctr:.2f}%)."
@@ -385,6 +463,25 @@ class ReportCommentator:
                 risks.append(f"CTR is low ({ctr:.2f}%), indicating creative fatigue or broad targeting.")
             if spend > 0 and conversions <= 0:
                 risks.append("Spend occurred with no conversions during the period.")
+
+            if objective in {"awareness", "reach", "video_views"}:
+                if impressions <= 0:
+                    risks.append("Awareness objective but impressions are zero over the period.")
+                recommendations.append(
+                    "Optimize reach/frequency and exposure quality before judging conversion outcomes."
+                )
+            elif objective in {"traffic", "engagement"}:
+                if clicks <= 0:
+                    risks.append("Traffic objective but no clicks were recorded.")
+                recommendations.append(
+                    "Prioritize CTR/CPC optimization via creative, targeting, and placement tuning."
+                )
+            elif objective in {"conversions", "leads", "app_installs"}:
+                if conversions <= 0 and leads <= 0:
+                    risks.append("Conversion/leads objective with no lower-funnel outcome.")
+                recommendations.append(
+                    "Prioritize ad sets that improve CPA/CPL while preserving useful conversion volume."
+                )
 
             if target_ctr is not None and ctr is not None and ctr < target_ctr:
                 recommendations.append(

@@ -71,3 +71,45 @@ def test_generate_commentary_falls_back_for_unknown_provider(
 
     assert isinstance(result, ReportCommentary)
     assert "unknown-provider_unavailable" in result.summary
+
+
+@pytest.mark.parametrize(
+    ("language", "objective", "expected_hint"),
+    [
+        ("fr", "awareness", "reach"),
+        ("fr", "traffic", "CTR/CPC"),
+        ("fr", "conversions", "CPA/CPL"),
+        ("en", "awareness", "reach/frequency"),
+        ("en", "traffic", "CTR/CPC"),
+        ("en", "conversions", "CPA/CPL"),
+    ],
+)
+def test_generate_commentary_applies_objective_specific_fallback_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+    language: str,
+    objective: str,
+    expected_hint: str,
+) -> None:
+    monkeypatch.delenv("AI_API_KEY", raising=False)
+
+    commentator = ReportCommentator(api_key="")
+    payload = {
+        "metrics": {
+            "impressions": 9000,
+            "clicks": 90,
+            "spend": 420.0,
+            "conversions": 2,
+            "leads": 1,
+        },
+        "campaign_context": {
+            "campaign_objective": objective,
+        },
+        "period": "2026-03-01 to 2026-03-30",
+        "language": language,
+        "tone": "analytical",
+    }
+
+    result = commentator.generate_commentary(payload)
+
+    assert isinstance(result, ReportCommentary)
+    assert any(expected_hint.lower() in recommendation.lower() for recommendation in result.recommendations)

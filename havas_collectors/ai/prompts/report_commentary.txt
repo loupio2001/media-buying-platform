@@ -2,7 +2,11 @@ Build an analytical campaign performance comment with key strengths, risks, and 
 
 Campaign: {campaign_name}
 Platform: {platform}
+Campaign Objective: {objective}
 Reporting Period: {period}
+
+Objective Playbook:
+{objective_playbook}
 
 Input JSON:
 {metrics_json}
