@@ -104,7 +104,7 @@
             this.disabled = true;
             this.textContent = 'Regenerating…';
             try {
-                const res = await fetch(`/api/reports/${reportId}/ai-comments/regenerate`, {
+                const res = await fetch(`/reports/${reportId}/ai-comments/regenerate`, {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
@@ -114,7 +114,17 @@
                 if (res.ok) {
                     window.location.reload();
                 } else {
-                    alert('Failed to regenerate AI comments. Please try again.');
+                    let message = 'Failed to regenerate AI comments. Please try again.';
+                    try {
+                        const payload = await res.json();
+                        if (payload?.error) {
+                            message = `${message}\n\n${payload.error}`;
+                        } else if (payload?.message) {
+                            message = `${message}\n\n${payload.message}`;
+                        }
+                    } catch (ignored) {}
+
+                    alert(message);
                     this.disabled = false;
                     this.textContent = '↺ Regenerate AI Comments';
                 }

@@ -63,6 +63,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/reports/create', [ReportWebController::class, 'create'])->name('web.reports.create');
     Route::post('/reports', [ReportWebController::class, 'store'])->name('web.reports.store');
     Route::get('/reports/{report}', [ReportWebController::class, 'show'])->name('web.reports.show');
+    Route::post('/reports/{report}/ai-comments/regenerate', [ReportWebController::class, 'regenerateAiComments'])
+        ->middleware('role:admin,manager')
+        ->name('web.reports.ai-comments.regenerate');
 
     // Briefs
     Route::get('/briefs', [BriefWebController::class, 'index'])->name('web.briefs.index');

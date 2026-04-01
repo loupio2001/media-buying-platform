@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use App\Models\Report;
 use App\Services\Api\ReportApiService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Throwable;
 
 class ReportWebController extends Controller
 {
@@ -51,5 +53,24 @@ class ReportWebController extends Controller
             ->findOrFail($report);
 
         return view('reports.show', compact('report'));
+    }
+
+    public function regenerateAiComments(Report $report): JsonResponse
+    {
+        try {
+            $result = $this->reportApiService->regenerateAiComments($report);
+
+            return response()->json([
+                'data' => $result,
+                'meta' => ['status' => 'regenerated'],
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Failed to regenerate AI comments.',
+                'error' => config('app.debug') ? $exception->getMessage() : null,
+            ], 500);
+        }
     }
 }
