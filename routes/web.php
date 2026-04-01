@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin,manager')->group(function () {
         Route::get('/campaigns/create', [CampaignWebController::class, 'create'])->name('web.campaigns.create');
         Route::post('/campaigns', [CampaignWebController::class, 'store'])->name('web.campaigns.store');
+        Route::patch('/campaigns/{campaign}/status', [CampaignWebController::class, 'updateStatus'])->name('web.campaigns.status.update');
         Route::post('/campaigns/{campaign}/platforms', [CampaignPlatformWebController::class, 'store'])->name('web.campaigns.platforms.store');
     });
     Route::get('/campaigns/{campaign}/trend.csv', [CampaignPageController::class, 'exportTrendCsv'])->name('web.campaigns.trend.csv');

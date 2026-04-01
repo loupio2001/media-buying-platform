@@ -11,9 +11,29 @@
                 <p class="mt-2 text-slate-300">Client: {{ $campaign->client?->name ?? '-' }}</p>
             </div>
 
-            <a href="{{ route('dashboard') }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-sm hover:border-orange-300/60">
-                Back to dashboard
-            </a>
+            <div class="flex items-center gap-3">
+                @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                    <form method="POST" action="{{ route('web.campaigns.status.update', $campaign) }}" class="flex items-center gap-2">
+                        @csrf
+                        @method('PATCH')
+                        <label for="status" class="text-xs uppercase tracking-wider text-slate-400">Status</label>
+                        <select id="status" name="status" class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 focus:border-orange-300 focus:outline-none">
+                            @foreach (\App\Enums\CampaignStatus::cases() as $status)
+                                <option value="{{ $status->value }}" @selected((is_object($campaign->status) ? $campaign->status->value : $campaign->status) === $status->value)>
+                                    {{ ucfirst($status->value) }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-950 hover:bg-orange-400">
+                            Update
+                        </button>
+                    </form>
+                @endif
+
+                <a href="{{ route('dashboard') }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-sm hover:border-orange-300/60">
+                    Back to dashboard
+                </a>
+            </div>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

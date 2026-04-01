@@ -6,6 +6,8 @@ use App\Enums\CampaignStatus;
 use App\Enums\PacingStrategy;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Web\StoreCampaignWebRequest;
+use App\Http\Requests\Web\UpdateCampaignStatusWebRequest;
+use App\Models\Campaign;
 use App\Models\Client;
 use App\Services\Api\CampaignApiService;
 use Illuminate\Contracts\View\View;
@@ -34,5 +36,16 @@ class CampaignWebController extends Controller
         return redirect()
             ->route('web.campaigns.show', $campaign)
             ->with('status', 'Campaign created successfully.');
+    }
+
+    public function updateStatus(UpdateCampaignStatusWebRequest $request, Campaign $campaign): RedirectResponse
+    {
+        $this->campaignApiService->update($campaign, [
+            'status' => (string) $request->validated('status'),
+        ]);
+
+        return redirect()
+            ->route('web.campaigns.show', $campaign)
+            ->with('status', 'Campaign status updated successfully.');
     }
 }
