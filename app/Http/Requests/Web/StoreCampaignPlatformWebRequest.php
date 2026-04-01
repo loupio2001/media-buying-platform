@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Web;
 
+use App\Models\PlatformConnection;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -44,7 +45,7 @@ class StoreCampaignPlatformWebRequest extends FormRequest
                 return;
             }
 
-            $connection = \App\Models\PlatformConnection::query()->find($connectionId);
+            $connection = PlatformConnection::query()->find($connectionId);
 
             if ($connection === null || (int) $connection->platform_id !== $platformId) {
                 $validator->errors()->add('platform_connection_id', 'Selected connection does not belong to the selected platform.');
