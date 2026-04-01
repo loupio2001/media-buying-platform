@@ -1,7 +1,7 @@
-"""Celery tasks for scheduled collector pulls."""
+"""Celery tasks package.
 
-"""Celery tasks for scheduled collector pulls and AI analysis dispatch."""
-
-from havas_collectors.tasks import ai_tasks, pull_tasks
+Keep imports lazy to avoid pulling optional dependencies when only one task
+module is needed (e.g., pull tasks from Laravel manual sync).
+"""
 
 __all__ = ["ai_tasks", "pull_tasks"]
