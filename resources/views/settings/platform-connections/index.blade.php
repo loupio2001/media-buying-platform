@@ -12,10 +12,18 @@
                     Configure advertising accounts and credentials used by collectors and scheduled data pulls.
                 </p>
             </div>
-            <a href="{{ route('web.platform-connections.oauth.authorize', ['platform' => 'meta']) }}"
-               class="inline-flex items-center justify-center rounded-md border border-orange-300/60 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-400/10">
-                Connect Meta OAuth
-            </a>
+            <div class="flex flex-wrap items-center gap-2">
+                <form method="POST" action="{{ route('web.platform-connections.sync-all', [], false) }}">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center justify-center rounded-md border border-sky-300/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:bg-sky-400/10">
+                        Force Sync Now
+                    </button>
+                </form>
+                <a href="{{ route('web.platform-connections.oauth.authorize', ['platform' => 'meta'], false) }}"
+                   class="inline-flex items-center justify-center rounded-md border border-orange-300/60 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-400/10">
+                    Connect Meta OAuth
+                </a>
+            </div>
         </div>
 
         @if ($errors->any())
@@ -31,7 +39,7 @@
 
         <section class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
             <h2 class="text-lg font-semibold text-white">Add manual connection</h2>
-            <form method="POST" action="{{ route('web.platform-connections.store') }}" class="mt-4 grid gap-4 md:grid-cols-2">
+            <form method="POST" action="{{ route('web.platform-connections.store', [], false) }}" class="mt-4 grid gap-4 md:grid-cols-2">
                 @csrf
                 <label class="space-y-2 text-sm text-slate-300">
                     <span>Platform</span>
@@ -108,7 +116,7 @@
                                     </td>
                                     <td class="px-5 py-3">
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <form method="POST" action="{{ route('web.platform-connections.update', $connection) }}">
+                                            <form method="POST" action="{{ route('web.platform-connections.update', ['platformConnection' => $connection], false) }}">
                                                 @csrf
                                                 @method('PATCH')
                                                 <input type="hidden" name="is_connected" value="{{ $connection->is_connected ? '0' : '1' }}">
@@ -117,7 +125,14 @@
                                                 </button>
                                             </form>
 
-                                            <form method="POST" action="{{ route('web.platform-connections.destroy', $connection) }}" onsubmit="return confirm('Delete this platform connection?');">
+                                            <form method="POST" action="{{ route('web.platform-connections.sync', ['platformConnection' => $connection], false) }}">
+                                                @csrf
+                                                <button type="submit" class="rounded-md border border-sky-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sky-200 hover:border-sky-400">
+                                                    Force Sync
+                                                </button>
+                                            </form>
+
+                                            <form method="POST" action="{{ route('web.platform-connections.destroy', ['platformConnection' => $connection], false) }}" onsubmit="return confirm('Delete this platform connection?');">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="rounded-md border border-rose-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-rose-200 hover:border-rose-400">

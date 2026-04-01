@@ -5,6 +5,10 @@ from typing import Any
 
 from sqlalchemy import create_engine, text
 
+from havas_collectors.config.env_loader import load_project_env
+
+load_project_env()
+
 SUPPORTED_PLATFORM_SLUGS = ("google", "meta", "tiktok")
 
 

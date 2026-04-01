@@ -5,6 +5,10 @@ import os
 from celery import Celery
 from celery.schedules import crontab
 
+from havas_collectors.config.env_loader import load_project_env
+
+
+load_project_env()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 

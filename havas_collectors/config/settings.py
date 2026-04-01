@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 
-from dotenv import load_dotenv
+from havas_collectors.config.env_loader import load_project_env
 
-load_dotenv(override=False)
+load_project_env()
 
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
