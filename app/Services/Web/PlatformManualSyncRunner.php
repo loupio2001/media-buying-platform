@@ -56,6 +56,8 @@ class PlatformManualSyncRunner
 
     private function environment(): array
     {
+        $baseEnvironment = $this->baseEnvironment();
+
         $internalApiToken = trim((string) config('services.internal_api_token'));
         if ($internalApiToken === '') {
             throw new InvalidArgumentException('Missing configuration: services.internal_api_token.');
@@ -102,7 +104,7 @@ class PlatformManualSyncRunner
             $redisUrl = sprintf('redis://%s:%s/%s', $redisHost, $redisPort, $redisDatabase);
         }
 
-        return [
+        return array_merge($baseEnvironment, [
             'LARAVEL_API_URL' => rtrim($apiUrl, '/'),
             'INTERNAL_API_TOKEN' => $internalApiToken,
             'DATABASE_URL' => $databaseUrl,
@@ -112,7 +114,21 @@ class PlatformManualSyncRunner
             'DB_USER' => (string) ($databaseConnection['username'] ?? ''),
             'DB_PASSWORD' => (string) ($databaseConnection['password'] ?? ''),
             'REDIS_URL' => $redisUrl,
-        ];
+        ]);
+    }
+
+    private function baseEnvironment(): array
+    {
+        $environment = getenv();
+
+        if (! is_array($environment)) {
+            return [];
+        }
+
+        return array_filter(
+            $environment,
+            static fn ($value): bool => is_scalar($value),
+        );
     }
 
     private function pythonBinary(): string
