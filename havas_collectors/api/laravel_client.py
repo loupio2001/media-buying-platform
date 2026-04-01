@@ -136,6 +136,32 @@ class LaravelInternalClient:
         )
         return response.get("data", {})
 
+    def get_campaign_commentary_context(
+        self,
+        campaign_id: int,
+        *,
+        days: int,
+        platform_id: int | None = None,
+    ) -> dict[str, Any]:
+        path = f"campaigns/{campaign_id}/ai-context?days={days}"
+        if platform_id is not None:
+            path += f"&platform_id={platform_id}"
+
+        payload = self._request("GET", path)
+        return payload.get("data", {})
+
+    def update_campaign_ai_comments(
+        self,
+        campaign_id: int,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = self._request(
+            "PATCH",
+            f"campaigns/{campaign_id}/ai-comments",
+            json_body=payload,
+        )
+        return response.get("data", {})
+
     def close(self) -> None:
         self._client.close()
 

@@ -33,6 +33,12 @@ class Campaign extends Model
         'sheet_url',
         'brief_raw',
         'internal_notes',
+        'ai_commentary_summary',
+        'ai_commentary_highlights',
+        'ai_commentary_concerns',
+        'ai_commentary_suggested_action',
+        'ai_commentary_filters',
+        'ai_commentary_generated_at',
         'created_by',
     ];
 
@@ -44,6 +50,10 @@ class Campaign extends Model
         'end_date' => 'date',
         'total_budget' => 'decimal:2',
         'kpi_targets' => 'array',
+        'ai_commentary_highlights' => 'array',
+        'ai_commentary_concerns' => 'array',
+        'ai_commentary_filters' => 'array',
+        'ai_commentary_generated_at' => 'datetime',
     ];
 
     public function client(): BelongsTo

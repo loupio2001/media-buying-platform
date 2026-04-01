@@ -3,6 +3,15 @@
 @section('title', 'Campaign Details | Havas Media Buying Platform')
 
 @section('content')
+    @php
+        $campaignCurrency = strtoupper((string) ($campaign->currency ?: 'MAD'));
+        $platformOptions = $campaign->campaignPlatforms
+            ->map(fn ($item) => $item->platform)
+            ->filter()
+            ->unique('id')
+            ->values();
+    @endphp
+
     <section class="space-y-6">
         <div class="flex items-center justify-between gap-3">
             <div>
@@ -28,6 +37,18 @@
                             Update
                         </button>
                     </form>
+
+                    <a href="{{ route('web.campaigns.edit', $campaign) }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-sm hover:border-orange-300/60">
+                        Edit
+                    </a>
+
+                    <form method="POST" action="{{ route('web.campaigns.destroy', $campaign) }}" onsubmit="return confirm('Delete this campaign permanently?');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="rounded-md border border-rose-700/70 px-3 py-1.5 text-sm text-rose-200 hover:border-rose-500">
+                            Delete
+                        </button>
+                    </form>
                 @endif
 
                 <a href="{{ route('dashboard') }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-sm hover:border-orange-300/60">
@@ -43,13 +64,13 @@
             </article>
 
             <article class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
-                <p class="text-sm text-slate-400">Total budget (MAD)</p>
-                <p class="mt-3 text-lg font-semibold text-white">{{ number_format((float) $campaign->total_budget, 2, '.', ' ') }}</p>
+                <p class="text-sm text-slate-400">Total budget ({{ $campaignCurrency }})</p>
+                <p class="mt-3 text-lg font-semibold text-white">{{ number_format((float) $campaign->total_budget, 2, '.', ' ') }} {{ $campaignCurrency }}</p>
             </article>
 
             <article class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
-                <p class="text-sm text-slate-400">Total spend (MAD)</p>
-                <p class="mt-3 text-lg font-semibold text-white">{{ number_format($kpi['total_spend'], 2, '.', ' ') }}</p>
+                <p class="text-sm text-slate-400">Total spend ({{ $campaignCurrency }})</p>
+                <p class="mt-3 text-lg font-semibold text-white">{{ number_format($kpi['total_spend'], 2, '.', ' ') }} {{ $campaignCurrency }}</p>
             </article>
 
             <article class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
@@ -69,9 +90,9 @@
                         <tr>
                             <th class="px-5 py-3 font-medium">Platform</th>
                             <th class="px-5 py-3 font-medium">External campaign ID</th>
-                            <th class="px-5 py-3 font-medium">Budget (MAD)</th>
+                            <th class="px-5 py-3 font-medium">Budget ({{ $campaignCurrency }})</th>
                             <th class="px-5 py-3 font-medium">Type</th>
-                            <th class="px-5 py-3 font-medium">Spend (MAD)</th>
+                            <th class="px-5 py-3 font-medium">Spend ({{ $campaignCurrency }})</th>
                             <th class="px-5 py-3 font-medium">Impressions</th>
                             <th class="px-5 py-3 font-medium">Clicks</th>
                             <th class="px-5 py-3 font-medium">CTR (%)</th>
@@ -83,9 +104,9 @@
                             <tr class="border-t border-slate-800/80 text-slate-200">
                                 <td class="px-5 py-3">{{ $item->platform_name }}</td>
                                 <td class="px-5 py-3 text-slate-300">{{ $item->external_campaign_id ?? '-' }}</td>
-                                <td class="px-5 py-3">{{ number_format((float) $item->budget, 2, '.', ' ') }}</td>
+                                <td class="px-5 py-3">{{ number_format((float) $item->budget, 2, '.', ' ') }} {{ $campaignCurrency }}</td>
                                 <td class="px-5 py-3 text-slate-300">{{ $item->budget_type }}</td>
-                                <td class="px-5 py-3">{{ number_format((float) $item->total_spend, 2, '.', ' ') }}</td>
+                                <td class="px-5 py-3">{{ number_format((float) $item->total_spend, 2, '.', ' ') }} {{ $campaignCurrency }}</td>
                                 <td class="px-5 py-3">{{ number_format((float) $item->total_impressions, 0, '.', ' ') }}</td>
                                 <td class="px-5 py-3">{{ number_format((float) $item->total_clicks, 0, '.', ' ') }}</td>
                                 <td class="px-5 py-3">{{ number_format((float) $item->calc_ctr, 4, '.', ' ') }}</td>
@@ -101,101 +122,97 @@
             </div>
         </section>
 
-        @if (auth()->user()->isAdmin() || auth()->user()->isManager())
-            <section class="space-y-4 rounded-xl border border-slate-800 bg-slate-900/80 p-5">
+        <section class="rounded-xl border border-slate-800 bg-slate-900/80 p-5 space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 class="text-lg font-semibold text-white">Link Platform</h2>
-                    <p class="mt-1 text-sm text-slate-300">Attach this campaign to a source platform so manual sync can pull its data.</p>
+                    <h2 class="text-lg font-semibold text-white">AI Campaign Commentary</h2>
+                    <p class="mt-1 text-sm text-slate-400">Comments are refreshed only when you click Update comments, using current filters.</p>
                 </div>
 
-                <form method="POST" action="{{ route('web.campaigns.platforms.store', $campaign) }}" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    @csrf
-
-                    <div>
-                        <label for="platform_id" class="mb-1 block text-sm text-slate-300">Platform <span class="text-rose-400">*</span></label>
-                        <select id="platform_id" name="platform_id" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
-                            <option value="">Select platform...</option>
-                            @foreach ($availablePlatforms as $platform)
-                                <option value="{{ $platform->id }}" @selected((int) old('platform_id') === $platform->id) @disabled(in_array($platform->id, $linkedPlatformIds, true))>
-                                    {{ $platform->name }}{{ in_array($platform->id, $linkedPlatformIds, true) ? ' (already linked)' : '' }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="platform_connection_id" class="mb-1 block text-sm text-slate-300">Platform connection</label>
-                        <select id="platform_connection_id" name="platform_connection_id" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
-                            <option value="">Select connection...</option>
-                            @foreach ($platformConnections as $connection)
-                                <option value="{{ $connection->id }}" @selected((int) old('platform_connection_id') === $connection->id)>
-                                    {{ $connection->platform?->name ?? 'Platform' }} - {{ $connection->account_name ?: $connection->account_id }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="external_campaign_id" class="mb-1 block text-sm text-slate-300">External campaign ID <span class="text-rose-400">*</span></label>
-                        <input type="text" id="external_campaign_id" name="external_campaign_id" value="{{ old('external_campaign_id') }}" required maxlength="100"
-                            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label for="budget" class="mb-1 block text-sm text-slate-300">Budget (MAD) <span class="text-rose-400">*</span></label>
-                        <input type="number" id="budget" name="budget" value="{{ old('budget') }}" min="0" step="0.01" required
-                            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
-                    </div>
-
-                    <div>
-                        <label for="budget_type" class="mb-1 block text-sm text-slate-300">Budget type <span class="text-rose-400">*</span></label>
-                        <select id="budget_type" name="budget_type" required class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
-                            <option value="lifetime" @selected(old('budget_type', 'lifetime') === 'lifetime')>Lifetime</option>
-                            <option value="daily" @selected(old('budget_type') === 'daily')>Daily</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="currency" class="mb-1 block text-sm text-slate-300">Currency</label>
-                        <input type="text" id="currency" name="currency" value="{{ old('currency', 'MAD') }}" maxlength="10"
-                            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
-                    </div>
-
-                    <div class="sm:col-span-2">
-                        <label for="notes" class="mb-1 block text-sm text-slate-300">Notes</label>
-                        <textarea id="notes" name="notes" rows="3"
-                            class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">{{ old('notes') }}</textarea>
-                    </div>
-
-                    <div class="sm:col-span-2 flex items-center justify-between">
-                        <label class="inline-flex items-center gap-2 text-sm text-slate-300">
-                            <input type="checkbox" name="is_active" value="1" @checked(old('is_active', '1') === '1') class="rounded border-slate-700 bg-slate-950 text-orange-500 focus:ring-orange-400">
-                            Active link
-                        </label>
-
-                        <button type="submit" class="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-orange-400">
-                            Link Platform
+                @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                    <form method="POST" action="{{ route('web.campaigns.ai-comments.regenerate', $campaign) }}" class="flex items-center gap-2">
+                        @csrf
+                        <input type="hidden" name="days" value="{{ $selectedPeriod }}">
+                        @if ($selectedPlatformId)
+                            <input type="hidden" name="platform_id" value="{{ $selectedPlatformId }}">
+                        @endif
+                        <button type="submit" class="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-950 hover:bg-orange-400">
+                            Update comments
                         </button>
-                    </div>
-                </form>
-            </section>
-        @endif
+                    </form>
+                @endif
+            </div>
+
+            @if ($campaign->ai_commentary_generated_at)
+                <p class="text-xs text-slate-500">
+                    Last update: {{ $campaign->ai_commentary_generated_at->format('d/m/Y H:i') }}
+                </p>
+            @endif
+
+            @if ($campaign->ai_commentary_summary)
+                <div class="rounded-lg border border-sky-800/40 bg-sky-900/10 p-4 space-y-3">
+                    <p class="text-sm text-slate-200">{{ $campaign->ai_commentary_summary }}</p>
+
+                    @if (! empty($campaign->ai_commentary_highlights))
+                        <div>
+                            <p class="text-xs font-semibold text-slate-400 mb-1">Highlights</p>
+                            <ul class="list-disc pl-4 space-y-0.5 text-sm text-slate-300">
+                                @foreach ((array) $campaign->ai_commentary_highlights as $item)
+                                    <li>{{ $item }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if (! empty($campaign->ai_commentary_concerns))
+                        <div>
+                            <p class="text-xs font-semibold text-slate-400 mb-1">Concerns</p>
+                            <ul class="list-disc pl-4 space-y-0.5 text-sm text-rose-300">
+                                @foreach ((array) $campaign->ai_commentary_concerns as $item)
+                                    <li>{{ $item }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if ($campaign->ai_commentary_suggested_action)
+                        <div>
+                            <p class="text-xs font-semibold text-slate-400 mb-1">Suggested Action</p>
+                            <p class="text-sm text-emerald-300">{{ $campaign->ai_commentary_suggested_action }}</p>
+                        </div>
+                    @endif
+                </div>
+            @else
+                <p class="text-sm text-slate-500 italic">No AI commentary yet. Click Update comments to generate insights from current filters.</p>
+            @endif
+        </section>
 
         <section class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
                 <h2 class="text-lg font-semibold text-white">Trend {{ $selectedPeriod }} days</h2>
 
                 <div class="flex flex-wrap items-center gap-2">
+                    <form method="GET" action="{{ route('web.campaigns.show', $campaign) }}" class="flex items-center gap-2">
+                        <input type="hidden" name="days" value="{{ $selectedPeriod }}">
+                        <label for="platform_id" class="text-xs uppercase tracking-wider text-slate-400">Platform</label>
+                        <select id="platform_id" name="platform_id" onchange="this.form.submit()" class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 focus:border-orange-300 focus:outline-none">
+                            <option value="">All</option>
+                            @foreach ($platformOptions as $platformOption)
+                                <option value="{{ $platformOption->id }}" @selected((int) $selectedPlatformId === (int) $platformOption->id)>{{ $platformOption->name }}</option>
+                            @endforeach
+                        </select>
+                    </form>
+
                     @foreach ($periodOptions as $period)
                         <a
-                            href="{{ route('web.campaigns.show', ['campaign' => $campaign->id, 'days' => $period]) }}"
+                            href="{{ route('web.campaigns.show', ['campaign' => $campaign->id, 'days' => $period, 'platform_id' => $selectedPlatformId]) }}"
                             class="rounded-md border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider {{ $selectedPeriod === $period ? 'border-orange-300/60 text-orange-300' : 'border-slate-700 text-slate-300 hover:border-orange-300/60' }}"
                         >
                             {{ $period }}d
                         </a>
                     @endforeach
                     <a
-                        href="{{ route('web.campaigns.trend.csv', ['campaign' => $campaign->id, 'days' => $selectedPeriod]) }}"
+                        href="{{ route('web.campaigns.trend.csv', ['campaign' => $campaign->id, 'days' => $selectedPeriod, 'platform_id' => $selectedPlatformId]) }}"
                         class="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sky-300 hover:border-sky-300/60"
                     >
                         Export CSV
@@ -207,8 +224,8 @@
                 <div>
                     <p class="text-xs uppercase tracking-wider text-slate-400">Spend sparkline</p>
                     <p class="mt-1 text-sm text-slate-300">
-                        Last day: <span class="font-semibold text-white">{{ number_format((float) $spendSparkline['lastSpend'], 2, '.', ' ') }} MAD</span>
-                        | Max: <span class="font-semibold text-white">{{ number_format((float) $spendSparkline['maxSpend'], 2, '.', ' ') }} MAD</span>
+                        Last day: <span class="font-semibold text-white">{{ number_format((float) $spendSparkline['lastSpend'], 2, '.', ' ') }} {{ $campaignCurrency }}</span>
+                        | Max: <span class="font-semibold text-white">{{ number_format((float) $spendSparkline['maxSpend'], 2, '.', ' ') }} {{ $campaignCurrency }}</span>
                     </p>
 
                     @if (! $spendSparkline['hasData'])
@@ -268,7 +285,7 @@
                     <thead class="bg-slate-950/40 text-slate-400">
                         <tr>
                             <th class="px-5 py-3 font-medium">Date</th>
-                            <th class="px-5 py-3 font-medium">Spend (MAD)</th>
+                            <th class="px-5 py-3 font-medium">Spend ({{ $campaignCurrency }})</th>
                             <th class="px-5 py-3 font-medium">Impressions</th>
                             <th class="px-5 py-3 font-medium">Clicks</th>
                             <th class="px-5 py-3 font-medium">CTR (%)</th>
@@ -278,7 +295,7 @@
                         @forelse ($dailyTrend as $row)
                             <tr class="border-t border-slate-800/80 text-slate-200">
                                 <td class="px-5 py-3">{{ $row->snapshot_date }}</td>
-                                <td class="px-5 py-3">{{ number_format((float) $row->total_spend, 2, '.', ' ') }}</td>
+                                <td class="px-5 py-3">{{ number_format((float) $row->total_spend, 2, '.', ' ') }} {{ $campaignCurrency }}</td>
                                 <td class="px-5 py-3">{{ number_format((float) $row->total_impressions, 0, '.', ' ') }}</td>
                                 <td class="px-5 py-3">{{ number_format((float) $row->total_clicks, 0, '.', ' ') }}</td>
                                 <td class="px-5 py-3">{{ number_format((float) $row->calc_ctr, 4, '.', ' ') }}</td>

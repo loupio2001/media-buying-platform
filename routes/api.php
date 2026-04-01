@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PlatformController;
 use App\Http\Controllers\Api\PlatformConnectionController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Internal\CampaignAiController;
 use App\Http\Controllers\Internal\ReportPlatformSectionController;
 use App\Http\Controllers\Internal\SnapshotController;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +30,8 @@ Route::prefix('internal/v1')
             '/report-platform-sections/{reportPlatformSection}/ai-context',
             [ReportPlatformSectionController::class, 'showAiContext']
         );
+        Route::get('/campaigns/{campaign}/ai-context', [CampaignAiController::class, 'showAiContext']);
+        Route::patch('/campaigns/{campaign}/ai-comments', [CampaignAiController::class, 'updateAiComments']);
         Route::patch('/platform-connections/{id}/sync-status', [SnapshotController::class, 'updateSyncStatus']);
         Route::get('/platform-connections/{id}/credentials', [SnapshotController::class, 'credentials']);
         Route::post('/platform-connections/{id}/refresh-token', [SnapshotController::class, 'refreshToken']);

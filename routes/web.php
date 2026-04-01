@@ -52,16 +52,28 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin,manager')->group(function () {
         Route::get('/campaigns/create', [CampaignWebController::class, 'create'])->name('web.campaigns.create');
         Route::post('/campaigns', [CampaignWebController::class, 'store'])->name('web.campaigns.store');
+        Route::get('/campaigns/{campaign}/edit', [CampaignWebController::class, 'edit'])->name('web.campaigns.edit');
+        Route::patch('/campaigns/{campaign}', [CampaignWebController::class, 'update'])->name('web.campaigns.update');
+        Route::delete('/campaigns/{campaign}', [CampaignWebController::class, 'destroy'])->name('web.campaigns.destroy');
         Route::patch('/campaigns/{campaign}/status', [CampaignWebController::class, 'updateStatus'])->name('web.campaigns.status.update');
         Route::post('/campaigns/{campaign}/platforms', [CampaignPlatformWebController::class, 'store'])->name('web.campaigns.platforms.store');
+        Route::delete('/campaigns/{campaign}/platforms/{campaignPlatform}', [CampaignPlatformWebController::class, 'destroy'])->name('web.campaigns.platforms.destroy');
     });
     Route::get('/campaigns/{campaign}/trend.csv', [CampaignPageController::class, 'exportTrendCsv'])->name('web.campaigns.trend.csv');
+    Route::post('/campaigns/{campaign}/ai-comments/regenerate', [CampaignPageController::class, 'regenerateAiComments'])
+        ->middleware('role:admin,manager')
+        ->name('web.campaigns.ai-comments.regenerate');
     Route::get('/campaigns/{campaign}', CampaignPageController::class)->name('web.campaigns.show');
 
     // Reports
     Route::get('/reports', [ReportWebController::class, 'index'])->name('web.reports.index');
-    Route::get('/reports/create', [ReportWebController::class, 'create'])->name('web.reports.create');
-    Route::post('/reports', [ReportWebController::class, 'store'])->name('web.reports.store');
+    Route::middleware('role:admin,manager')->group(function () {
+        Route::get('/reports/create', [ReportWebController::class, 'create'])->name('web.reports.create');
+        Route::post('/reports', [ReportWebController::class, 'store'])->name('web.reports.store');
+        Route::get('/reports/{report}/edit', [ReportWebController::class, 'edit'])->name('web.reports.edit');
+        Route::patch('/reports/{report}', [ReportWebController::class, 'update'])->name('web.reports.update');
+        Route::delete('/reports/{report}', [ReportWebController::class, 'destroy'])->name('web.reports.destroy');
+    });
     Route::get('/reports/{report}', [ReportWebController::class, 'show'])->name('web.reports.show');
     Route::post('/reports/{report}/ai-comments/regenerate', [ReportWebController::class, 'regenerateAiComments'])
         ->middleware('role:admin,manager')
@@ -75,8 +87,13 @@ Route::middleware('auth')->group(function () {
 
     // Clients
     Route::get('/clients', [ClientWebController::class, 'index'])->name('web.clients.index');
-    Route::get('/clients/create', [ClientWebController::class, 'create'])->name('web.clients.create');
-    Route::post('/clients', [ClientWebController::class, 'store'])->name('web.clients.store');
+    Route::middleware('role:admin,manager')->group(function () {
+        Route::get('/clients/create', [ClientWebController::class, 'create'])->name('web.clients.create');
+        Route::post('/clients', [ClientWebController::class, 'store'])->name('web.clients.store');
+        Route::get('/clients/{client}/edit', [ClientWebController::class, 'edit'])->name('web.clients.edit');
+        Route::patch('/clients/{client}', [ClientWebController::class, 'update'])->name('web.clients.update');
+        Route::delete('/clients/{client}', [ClientWebController::class, 'destroy'])->name('web.clients.destroy');
+    });
     Route::get('/clients/{client}', [ClientWebController::class, 'show'])->name('web.clients.show');
 
     // Notifications

@@ -2,24 +2,31 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CampaignPlatform;
 use App\Models\Campaign;
-use App\Models\Platform;
-use App\Models\PlatformConnection;
+use App\Services\CampaignAiCommentaryRunner;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CampaignPageController extends Controller
 {
     private const PERIOD_OPTIONS = [7, 14, 30];
 
+    public function __construct(private CampaignAiCommentaryRunner $campaignAiCommentaryRunner)
+    {
+    }
+
     public function __invoke(Request $request, Campaign $campaign): View
     {
         $selectedPeriod = $this->resolveSelectedPeriod($request);
+        $selectedPlatformId = $this->resolveSelectedPlatformId($request, $campaign->id);
 
         $campaign->load(['client:id,name', 'campaignPlatforms.platform:id,name']);
 
@@ -76,22 +83,9 @@ class CampaignPageController extends Controller
                 ]);
         }
 
-        $dailyTrend = $this->dailyTrend($campaign->id, $selectedPeriod);
+        $dailyTrend = $this->dailyTrend($campaign->id, $selectedPeriod, $selectedPlatformId);
         $spendSparkline = $this->buildSparkline($dailyTrend, 'total_spend');
         $clicksSparkline = $this->buildSparkline($dailyTrend, 'total_clicks');
-        $availablePlatforms = Platform::query()
-            ->active()
-            ->ordered()
-            ->get(['id', 'name']);
-        $platformConnections = PlatformConnection::query()
-            ->connected()
-            ->with('platform:id,name')
-            ->orderBy('account_name')
-            ->get(['id', 'platform_id', 'account_id', 'account_name']);
-        $linkedPlatformIds = $campaign->campaignPlatforms
-            ->pluck('platform_id')
-            ->map(static fn ($value) => (int) $value)
-            ->all();
 
         return view('campaigns.show', [
             'campaign' => $campaign,
@@ -104,32 +98,63 @@ class CampaignPageController extends Controller
             'spendSparkline' => $spendSparkline,
             'clicksSparkline' => $clicksSparkline,
             'selectedPeriod' => $selectedPeriod,
+            'selectedPlatformId' => $selectedPlatformId,
             'periodOptions' => self::PERIOD_OPTIONS,
-            'availablePlatforms' => $availablePlatforms,
-            'platformConnections' => $platformConnections,
-            'linkedPlatformIds' => $linkedPlatformIds,
         ]);
+    }
+
+    public function regenerateAiComments(Request $request, Campaign $campaign): RedirectResponse
+    {
+        $days = $this->resolveSelectedPeriod($request);
+        $platformId = $this->resolveSelectedPlatformId($request, $campaign->id);
+
+        try {
+            $this->campaignAiCommentaryRunner->runCampaign($campaign->id, $days, $platformId);
+
+            return redirect()
+                ->route('web.campaigns.show', [
+                    'campaign' => $campaign->id,
+                    'days' => $days,
+                    'platform_id' => $platformId,
+                ])
+                ->with('status', 'AI comments updated using current filters.');
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('web.campaigns.show', [
+                    'campaign' => $campaign->id,
+                    'days' => $days,
+                    'platform_id' => $platformId,
+                ])
+                ->withErrors(['ai_comments' => 'Unable to update AI comments right now.']);
+        }
     }
 
     public function exportTrendCsv(Request $request, Campaign $campaign): StreamedResponse
     {
         $selectedPeriod = $this->resolveSelectedPeriod($request);
-        $trendRows = $this->dailyTrend($campaign->id, $selectedPeriod);
+        $selectedPlatformId = $this->resolveSelectedPlatformId($request, $campaign->id);
+        $trendRows = $this->dailyTrend($campaign->id, $selectedPeriod, $selectedPlatformId);
+        $campaignCurrency = strtoupper((string) ($campaign->currency ?: 'MAD'));
 
-        $filename = sprintf('campaign-%d-trend-%dd.csv', $campaign->id, $selectedPeriod);
+        $filename = $selectedPlatformId !== null
+            ? sprintf('campaign-%d-platform-%d-trend-%dd.csv', $campaign->id, $selectedPlatformId, $selectedPeriod)
+            : sprintf('campaign-%d-trend-%dd.csv', $campaign->id, $selectedPeriod);
 
-        return response()->streamDownload(function () use ($trendRows): void {
+        return response()->streamDownload(function () use ($trendRows, $campaignCurrency): void {
             $handle = fopen('php://output', 'w');
             if ($handle === false) {
                 return;
             }
 
-            fputcsv($handle, ['date', 'spend_mad', 'impressions', 'clicks', 'ctr_pct']);
+            fputcsv($handle, ['date', 'spend', 'currency', 'impressions', 'clicks', 'ctr_pct']);
 
             foreach ($trendRows as $row) {
                 fputcsv($handle, [
                     (string) $row->snapshot_date,
                     number_format((float) $row->total_spend, 2, '.', ''),
+                    $campaignCurrency,
                     (int) $row->total_impressions,
                     (int) $row->total_clicks,
                     number_format((float) $row->calc_ctr, 4, '.', ''),
@@ -153,13 +178,29 @@ class CampaignPageController extends Controller
         return $selectedPeriod;
     }
 
-    private function dailyTrend(int $campaignId, int $days): Collection
+    private function resolveSelectedPlatformId(Request $request, int $campaignId): ?int
+    {
+        $platformId = (int) $request->integer('platform_id', 0);
+
+        if ($platformId < 1) {
+            return null;
+        }
+
+        $belongsToCampaign = CampaignPlatform::query()
+            ->where('campaign_id', $campaignId)
+            ->where('platform_id', $platformId)
+            ->exists();
+
+        return $belongsToCampaign ? $platformId : null;
+    }
+
+    private function dailyTrend(int $campaignId, int $days, ?int $platformId = null): Collection
     {
         $endDate = Carbon::now()->startOfDay();
         $startDate = (clone $endDate)->subDays($days - 1);
 
         try {
-            $rows = DB::table('ad_snapshots as s')
+            $query = DB::table('ad_snapshots as s')
                 ->join('ads as a', 'a.id', '=', 's.ad_id')
                 ->join('ad_sets as aset', 'aset.id', '=', 'a.ad_set_id')
                 ->join('campaign_platforms as cp', 'cp.id', '=', 'aset.campaign_platform_id')
@@ -173,8 +214,13 @@ class CampaignPageController extends Controller
                 ->selectRaw('COALESCE(SUM(s.spend), 0) as total_spend')
                 ->selectRaw('COALESCE(SUM(s.impressions), 0) as total_impressions')
                 ->selectRaw('COALESCE(SUM(s.clicks), 0) as total_clicks')
-                ->selectRaw('CASE WHEN COALESCE(SUM(s.impressions), 0) > 0 THEN ROUND(SUM(s.clicks)::numeric / SUM(s.impressions) * 100, 4) ELSE 0 END as calc_ctr')
-                ->get();
+                ->selectRaw('CASE WHEN COALESCE(SUM(s.impressions), 0) > 0 THEN ROUND(SUM(s.clicks)::numeric / SUM(s.impressions) * 100, 4) ELSE 0 END as calc_ctr');
+
+            if ($platformId !== null) {
+                $query->where('cp.platform_id', $platformId);
+            }
+
+            $rows = $query->get();
 
             return $this->fillMissingTrendDays($rows, $startDate, $days);
         } catch (QueryException) {
