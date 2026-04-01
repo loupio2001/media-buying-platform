@@ -19,6 +19,8 @@ COLLECTOR_MAP = {
     "youtube": YouTubeCollector,
 }
 
+DEFAULT_PULL_LOOKBACK_DAYS = 30
+
 
 def _build_laravel_client() -> LaravelInternalClient:
     base_url = os.getenv("LARAVEL_API_URL", "http://127.0.0.1:8000/api/internal/v1")
@@ -37,6 +39,18 @@ def _merge_credentials(credentials: dict[str, Any]) -> dict[str, Any]:
     return {**extra_credentials, **credentials, "extra_credentials": extra_credentials}
 
 
+def _resolve_pull_lookback_days() -> int:
+    raw = os.getenv("PULL_LOOKBACK_DAYS", str(DEFAULT_PULL_LOOKBACK_DAYS)).strip()
+
+    try:
+        value = int(raw)
+    except ValueError:
+        value = DEFAULT_PULL_LOOKBACK_DAYS
+
+    # Keep a safe bound to avoid massive accidental backfills.
+    return max(1, min(value, 90))
+
+
 @app.task(name="havas_collectors.tasks.pull_tasks.pull_all_active_campaigns")
 def pull_all_active_campaigns() -> dict[str, int]:
     campaign_platforms = get_active_campaign_platforms()
@@ -44,6 +58,40 @@ def pull_all_active_campaigns() -> dict[str, int]:
     skipped = 0
 
     for campaign_platform in campaign_platforms:
+        platform_slug = str(campaign_platform.get("platform_slug") or "")
+        if platform_slug not in COLLECTOR_MAP:
+            skipped += 1
+            LOGGER.info(
+                "Skipping campaign_platform_id=%s unsupported platform=%s",
+                campaign_platform.get("campaign_platform_id"),
+                platform_slug,
+            )
+            continue
+
+        pull_single_campaign_platform.delay(
+            campaign_platform_id=int(campaign_platform["campaign_platform_id"]),
+            platform_slug=platform_slug,
+            external_campaign_id=str(campaign_platform["external_campaign_id"]),
+            connection_id=int(campaign_platform["connection_id"])
+            if campaign_platform.get("connection_id") is not None
+            else None,
+            account_id=str(campaign_platform.get("account_id") or ""),
+        )
+        dispatched += 1
+
+    return {"dispatched": dispatched, "skipped": skipped}
+
+
+@app.task(name="havas_collectors.tasks.pull_tasks.pull_connection_campaigns")
+def pull_connection_campaigns(connection_id: int) -> dict[str, int]:
+    campaign_platforms = get_active_campaign_platforms()
+    dispatched = 0
+    skipped = 0
+
+    for campaign_platform in campaign_platforms:
+        if int(campaign_platform.get("connection_id") or 0) != int(connection_id):
+            continue
+
         platform_slug = str(campaign_platform.get("platform_slug") or "")
         if platform_slug not in COLLECTOR_MAP:
             skipped += 1
@@ -108,7 +156,7 @@ def pull_single_campaign_platform(
             )
 
         date_to = date.today()
-        date_from = date_to - timedelta(days=3)
+        date_from = date_to - timedelta(days=_resolve_pull_lookback_days())
 
         summary = collector.collect(
             credentials=credentials,
