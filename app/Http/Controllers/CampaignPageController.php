@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Campaign;
+use App\Models\Platform;
+use App\Models\PlatformConnection;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
@@ -48,6 +50,7 @@ class CampaignPageController extends Controller
                 ->where('cp.campaign_id', $campaign->id)
                 ->selectRaw('cp.id as campaign_platform_id')
                 ->selectRaw('p.name as platform_name')
+                ->selectRaw('cp.external_campaign_id')
                 ->selectRaw('cp.budget')
                 ->selectRaw('cp.budget_type')
                 ->selectRaw('cp.is_active')
@@ -62,6 +65,7 @@ class CampaignPageController extends Controller
                 ->map(static fn ($item) => (object) [
                     'campaign_platform_id' => $item->id,
                     'platform_name' => $item->platform?->name ?? '-',
+                    'external_campaign_id' => $item->external_campaign_id,
                     'budget' => (float) $item->budget,
                     'budget_type' => $item->budget_type,
                     'is_active' => (bool) $item->is_active,
@@ -75,6 +79,19 @@ class CampaignPageController extends Controller
         $dailyTrend = $this->dailyTrend($campaign->id, $selectedPeriod);
         $spendSparkline = $this->buildSparkline($dailyTrend, 'total_spend');
         $clicksSparkline = $this->buildSparkline($dailyTrend, 'total_clicks');
+        $availablePlatforms = Platform::query()
+            ->active()
+            ->ordered()
+            ->get(['id', 'name']);
+        $platformConnections = PlatformConnection::query()
+            ->connected()
+            ->with('platform:id,name')
+            ->orderBy('account_name')
+            ->get(['id', 'platform_id', 'account_id', 'account_name']);
+        $linkedPlatformIds = $campaign->campaignPlatforms
+            ->pluck('platform_id')
+            ->map(static fn ($value) => (int) $value)
+            ->all();
 
         return view('campaigns.show', [
             'campaign' => $campaign,
@@ -88,6 +105,9 @@ class CampaignPageController extends Controller
             'clicksSparkline' => $clicksSparkline,
             'selectedPeriod' => $selectedPeriod,
             'periodOptions' => self::PERIOD_OPTIONS,
+            'availablePlatforms' => $availablePlatforms,
+            'platformConnections' => $platformConnections,
+            'linkedPlatformIds' => $linkedPlatformIds,
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\CampaignPageController;
 use App\Http\Controllers\PlatformConnectionOAuthController;
 use App\Http\Controllers\PlatformConnectionSettingsController;
 use App\Http\Controllers\Web\BriefWebController;
+use App\Http\Controllers\Web\CampaignPlatformWebController;
 use App\Http\Controllers\Web\CampaignWebController;
 use App\Http\Controllers\Web\ClientWebController;
 use App\Http\Controllers\Web\NotificationWebController;
@@ -51,6 +52,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:admin,manager')->group(function () {
         Route::get('/campaigns/create', [CampaignWebController::class, 'create'])->name('web.campaigns.create');
         Route::post('/campaigns', [CampaignWebController::class, 'store'])->name('web.campaigns.store');
+        Route::post('/campaigns/{campaign}/platforms', [CampaignPlatformWebController::class, 'store'])->name('web.campaigns.platforms.store');
     });
     Route::get('/campaigns/{campaign}/trend.csv', [CampaignPageController::class, 'exportTrendCsv'])->name('web.campaigns.trend.csv');
     Route::get('/campaigns/{campaign}', CampaignPageController::class)->name('web.campaigns.show');
