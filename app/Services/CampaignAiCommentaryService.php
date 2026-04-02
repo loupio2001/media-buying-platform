@@ -102,6 +102,80 @@ class CampaignAiCommentaryService
         return $campaign->refresh();
     }
 
+    public function generateLocalFallbackCommentary(Campaign $campaign, int $days, ?int $platformId): Campaign
+    {
+        $context = $this->buildContext($campaign->loadMissing('client'), $days, $platformId);
+        $metrics = $context['metrics'];
+        $campaignContext = $context['campaign_context'];
+
+        $spend = (float) ($metrics['spend'] ?? 0);
+        $impressions = (int) ($metrics['impressions'] ?? 0);
+        $clicks = (int) ($metrics['clicks'] ?? 0);
+        $conversions = (int) ($metrics['conversions'] ?? 0);
+        $leads = (int) ($metrics['leads'] ?? 0);
+        $ctr = (float) ($metrics['ctr'] ?? 0);
+        $cpc = $metrics['cpc'];
+
+        $highlights = [];
+        $concerns = [];
+
+        if ($impressions > 0) {
+            $highlights[] = sprintf('Volume de diffusion observe: %d impressions sur la fenetre selectionnee.', $impressions);
+        } else {
+            $highlights[] = 'Aucune impression detectee sur la fenetre selectionnee.';
+        }
+
+        if ($clicks > 0) {
+            $highlights[] = sprintf('Trafic actif avec %d clics et un CTR de %.2f%%.', $clicks, $ctr);
+        }
+
+        if ($conversions > 0 || $leads > 0) {
+            $highlights[] = sprintf('Resultats bas de funnel observes: %d conversions, %d leads.', $conversions, $leads);
+        }
+
+        if ($spend > 0 && $clicks === 0) {
+            $concerns[] = 'Depense detectee sans clic sur la periode, verifier ciblage et creatives.';
+        }
+
+        if ($clicks > 0 && $ctr < 0.6) {
+            $concerns[] = sprintf('CTR faible (%.2f%%), risque de fatigue creative ou d audience trop large.', $ctr);
+        }
+
+        if ($spend > 0 && $conversions === 0 && $leads === 0) {
+            $concerns[] = 'Depense engagee sans conversions ni leads sur la periode.';
+        }
+
+        if ($concerns === []) {
+            $concerns[] = 'Aucun signal de risque critique detecte avec les metriques disponibles.';
+        }
+
+        $platformName = (string) ($campaignContext['platform_name'] ?? 'All platforms');
+        $summary = sprintf(
+            'Commentaire genere en mode de secours local pour %s (%s). Depense %.2f MAD, %d impressions, %d clics.',
+            $platformName,
+            $context['period'],
+            $spend,
+            $impressions,
+            $clicks,
+        );
+
+        $suggestedAction = is_numeric($cpc) && (float) $cpc > 0
+            ? sprintf('Prioriser les ensembles a CPC plus faible (CPC actuel: %.2f) et revoir les creatives sous-performantes.', (float) $cpc)
+            : 'Relancer des creatives tests et verifier la qualite du tracking avant de scaler le budget.';
+
+        return $this->updateAiComments(
+            $campaign,
+            [
+                'ai_commentary_summary' => $summary,
+                'ai_commentary_highlights' => $highlights,
+                'ai_commentary_concerns' => $concerns,
+                'ai_commentary_suggested_action' => $suggestedAction,
+            ],
+            $days,
+            $platformId,
+        );
+    }
+
     private function baseSnapshotQuery(int $campaignId, string $startDate, string $endDate): Builder
     {
         return DB::table('ad_snapshots as s')

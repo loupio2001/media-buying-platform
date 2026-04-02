@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CampaignPlatform;
 use App\Models\Campaign;
+use App\Services\CampaignAiCommentaryService;
 use App\Services\CampaignAiCommentaryRunner;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -19,7 +20,10 @@ class CampaignPageController extends Controller
 {
     private const PERIOD_OPTIONS = [7, 14, 30];
 
-    public function __construct(private CampaignAiCommentaryRunner $campaignAiCommentaryRunner)
+    public function __construct(
+        private CampaignAiCommentaryRunner $campaignAiCommentaryRunner,
+        private CampaignAiCommentaryService $campaignAiCommentaryService,
+    )
     {
     }
 
@@ -27,6 +31,7 @@ class CampaignPageController extends Controller
     {
         $selectedPeriod = $this->resolveSelectedPeriod($request);
         $selectedPlatformId = $this->resolveSelectedPlatformId($request, $campaign->id);
+        $trendRange = $this->resolveTrendRange($request, $selectedPeriod);
 
         $campaign->load(['client:id,name', 'campaignPlatforms.platform:id,name']);
 
@@ -83,7 +88,13 @@ class CampaignPageController extends Controller
                 ]);
         }
 
-        $dailyTrend = $this->dailyTrend($campaign->id, $selectedPeriod, $selectedPlatformId);
+        $dailyTrend = $this->dailyTrend(
+            $campaign->id,
+            $trendRange['days'],
+            $selectedPlatformId,
+            $trendRange['startDate'],
+            $trendRange['endDate'],
+        );
         $spendSparkline = $this->buildSparkline($dailyTrend, 'total_spend');
         $clicksSparkline = $this->buildSparkline($dailyTrend, 'total_clicks');
 
@@ -98,14 +109,19 @@ class CampaignPageController extends Controller
             'spendSparkline' => $spendSparkline,
             'clicksSparkline' => $clicksSparkline,
             'selectedPeriod' => $selectedPeriod,
+            'activeTrendDays' => $trendRange['days'],
             'selectedPlatformId' => $selectedPlatformId,
+            'selectedStartDate' => $trendRange['startDateInput'],
+            'selectedEndDate' => $trendRange['endDateInput'],
             'periodOptions' => self::PERIOD_OPTIONS,
         ]);
     }
 
     public function regenerateAiComments(Request $request, Campaign $campaign): RedirectResponse
     {
-        $days = $this->resolveSelectedPeriod($request);
+        $selectedPeriod = $this->resolveSelectedPeriod($request);
+        $trendRange = $this->resolveTrendRange($request, $selectedPeriod);
+        $days = $trendRange['days'];
         $platformId = $this->resolveSelectedPlatformId($request, $campaign->id);
 
         try {
@@ -116,16 +132,34 @@ class CampaignPageController extends Controller
                     'campaign' => $campaign->id,
                     'days' => $days,
                     'platform_id' => $platformId,
+                    'start_date' => $trendRange['startDateInput'] ?: null,
+                    'end_date' => $trendRange['endDateInput'] ?: null,
                 ])
                 ->with('status', 'AI comments updated using current filters.');
         } catch (Throwable $exception) {
             report($exception);
+
+            if ($this->allowLocalFallback() && $this->shouldFallbackToLocalCommentary($exception)) {
+                $this->campaignAiCommentaryService->generateLocalFallbackCommentary($campaign, $days, $platformId);
+
+                return redirect()
+                    ->route('web.campaigns.show', [
+                        'campaign' => $campaign->id,
+                        'days' => $days,
+                        'platform_id' => $platformId,
+                        'start_date' => $trendRange['startDateInput'] ?: null,
+                        'end_date' => $trendRange['endDateInput'] ?: null,
+                    ])
+                    ->with('status', 'AI comments updated in local fallback mode.');
+            }
 
             return redirect()
                 ->route('web.campaigns.show', [
                     'campaign' => $campaign->id,
                     'days' => $days,
                     'platform_id' => $platformId,
+                    'start_date' => $trendRange['startDateInput'] ?: null,
+                    'end_date' => $trendRange['endDateInput'] ?: null,
                 ])
                 ->withErrors(['ai_comments' => 'Unable to update AI comments right now.']);
         }
@@ -135,12 +169,19 @@ class CampaignPageController extends Controller
     {
         $selectedPeriod = $this->resolveSelectedPeriod($request);
         $selectedPlatformId = $this->resolveSelectedPlatformId($request, $campaign->id);
-        $trendRows = $this->dailyTrend($campaign->id, $selectedPeriod, $selectedPlatformId);
+        $trendRange = $this->resolveTrendRange($request, $selectedPeriod);
+        $trendRows = $this->dailyTrend(
+            $campaign->id,
+            $trendRange['days'],
+            $selectedPlatformId,
+            $trendRange['startDate'],
+            $trendRange['endDate'],
+        );
         $campaignCurrency = strtoupper((string) ($campaign->currency ?: 'MAD'));
 
         $filename = $selectedPlatformId !== null
-            ? sprintf('campaign-%d-platform-%d-trend-%dd.csv', $campaign->id, $selectedPlatformId, $selectedPeriod)
-            : sprintf('campaign-%d-trend-%dd.csv', $campaign->id, $selectedPeriod);
+            ? sprintf('campaign-%d-platform-%d-trend-%dd.csv', $campaign->id, $selectedPlatformId, $trendRange['days'])
+            : sprintf('campaign-%d-trend-%dd.csv', $campaign->id, $trendRange['days']);
 
         return response()->streamDownload(function () use ($trendRows, $campaignCurrency): void {
             $handle = fopen('php://output', 'w');
@@ -194,10 +235,59 @@ class CampaignPageController extends Controller
         return $belongsToCampaign ? $platformId : null;
     }
 
-    private function dailyTrend(int $campaignId, int $days, ?int $platformId = null): Collection
+    private function resolveTrendRange(Request $request, int $selectedPeriod): array
     {
+        $validated = $request->validate([
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+        ]);
+
+        $startDateInput = (string) ($validated['start_date'] ?? '');
+        $endDateInput = (string) ($validated['end_date'] ?? '');
+
+        if ($startDateInput !== '' || $endDateInput !== '') {
+            $endDate = $endDateInput !== ''
+                ? Carbon::createFromFormat('Y-m-d', $endDateInput)->startOfDay()
+                : Carbon::now()->startOfDay();
+
+            $startDate = $startDateInput !== ''
+                ? Carbon::createFromFormat('Y-m-d', $startDateInput)->startOfDay()
+                : (clone $endDate)->subDays($selectedPeriod - 1);
+
+            $days = (int) $startDate->diffInDays($endDate) + 1;
+
+            return [
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'days' => $days,
+                'startDateInput' => $startDate->toDateString(),
+                'endDateInput' => $endDate->toDateString(),
+            ];
+        }
+
         $endDate = Carbon::now()->startOfDay();
-        $startDate = (clone $endDate)->subDays($days - 1);
+        $startDate = (clone $endDate)->subDays($selectedPeriod - 1);
+
+        return [
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'days' => $selectedPeriod,
+            'startDateInput' => '',
+            'endDateInput' => '',
+        ];
+    }
+
+    private function dailyTrend(
+        int $campaignId,
+        int $days,
+        ?int $platformId = null,
+        ?Carbon $startDate = null,
+        ?Carbon $endDate = null,
+    ): Collection
+    {
+        $resolvedEndDate = $endDate ? (clone $endDate)->startOfDay() : Carbon::now()->startOfDay();
+        $resolvedStartDate = $startDate ? (clone $startDate)->startOfDay() : (clone $resolvedEndDate)->subDays($days - 1);
+        $resolvedDays = (int) $resolvedStartDate->diffInDays($resolvedEndDate) + 1;
 
         try {
             $query = DB::table('ad_snapshots as s')
@@ -206,8 +296,8 @@ class CampaignPageController extends Controller
                 ->join('campaign_platforms as cp', 'cp.id', '=', 'aset.campaign_platform_id')
                 ->where('cp.campaign_id', $campaignId)
                 ->where('s.granularity', 'daily')
-                ->whereDate('s.snapshot_date', '>=', $startDate->toDateString())
-                ->whereDate('s.snapshot_date', '<=', $endDate->toDateString())
+                ->whereDate('s.snapshot_date', '>=', $resolvedStartDate->toDateString())
+                ->whereDate('s.snapshot_date', '<=', $resolvedEndDate->toDateString())
                 ->groupBy('s.snapshot_date')
                 ->orderBy('s.snapshot_date')
                 ->selectRaw('s.snapshot_date')
@@ -222,9 +312,9 @@ class CampaignPageController extends Controller
 
             $rows = $query->get();
 
-            return $this->fillMissingTrendDays($rows, $startDate, $days);
+            return $this->fillMissingTrendDays($rows, $resolvedStartDate, $resolvedDays);
         } catch (QueryException) {
-            return $this->fillMissingTrendDays(collect(), $startDate, $days);
+            return $this->fillMissingTrendDays(collect(), $resolvedStartDate, $resolvedDays);
         }
     }
 
@@ -256,6 +346,20 @@ class CampaignPageController extends Controller
                 ];
             })
             ->values();
+    }
+
+    private function shouldFallbackToLocalCommentary(Throwable $exception): bool
+    {
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'WinError 10106')
+            || str_contains($message, 'httpx.ConnectError')
+            || str_contains($message, 'httpcore.ConnectError');
+    }
+
+    private function allowLocalFallback(): bool
+    {
+        return (bool) config('services.ai_report_commentary.allow_local_fallback', false);
     }
 
     private function buildSparkline(Collection $dailyTrend, string $metricKey): array

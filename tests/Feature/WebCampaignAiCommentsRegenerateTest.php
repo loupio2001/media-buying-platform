@@ -6,7 +6,9 @@ use App\Models\Campaign;
 use App\Models\CampaignPlatform;
 use App\Models\Platform;
 use App\Models\User;
+use App\Services\CampaignAiCommentaryService;
 use App\Services\CampaignAiCommentaryRunner;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -74,5 +76,45 @@ class WebCampaignAiCommentsRegenerateTest extends TestCase
             ]);
 
         $response->assertForbidden();
+    }
+
+    public function test_falls_back_to_local_commentary_when_python_network_error_occurs(): void
+    {
+        /** @var User $admin */
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $campaign = Campaign::factory()->create([
+            'created_by' => $admin->id,
+        ]);
+
+        Config::set('services.ai_report_commentary.allow_local_fallback', true);
+
+        $runner = Mockery::mock(CampaignAiCommentaryRunner::class);
+        $runner->shouldReceive('runCampaign')
+            ->once()
+            ->with($campaign->id, 7, null)
+            ->andThrow(new \RuntimeException('httpx.ConnectError: [WinError 10106] test'));
+        $this->app->instance(CampaignAiCommentaryRunner::class, $runner);
+
+        $service = Mockery::mock(CampaignAiCommentaryService::class);
+        $service->shouldReceive('generateLocalFallbackCommentary')
+            ->once()
+            ->with(Mockery::type(Campaign::class), 7, null)
+            ->andReturn($campaign);
+        $this->app->instance(CampaignAiCommentaryService::class, $service);
+
+        $response = $this->actingAs($admin)
+            ->post(route('web.campaigns.ai-comments.regenerate', $campaign), [
+                'days' => 7,
+            ]);
+
+        $response
+            ->assertRedirect(route('web.campaigns.show', [
+                'campaign' => $campaign->id,
+                'days' => 7,
+                'platform_id' => null,
+            ]))
+            ->assertSessionHas('status', 'AI comments updated in local fallback mode.');
+
     }
 }

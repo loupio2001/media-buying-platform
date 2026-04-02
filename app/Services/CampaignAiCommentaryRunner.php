@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Support\Facades\Process;
 use InvalidArgumentException;
 
@@ -17,9 +18,29 @@ class CampaignAiCommentaryRunner
             throw new InvalidArgumentException('The days argument must be between 1 and 90.');
         }
 
+        $environment = $this->environment();
+
+        try {
+            $this->runCommand($campaignId, $days, $platformId, $environment);
+        } catch (ProcessFailedException $exception) {
+            $alternateApiUrl = $this->alternateLoopbackApiUrl($environment['LARAVEL_API_URL'] ?? '');
+
+            if (! $this->shouldRetryWithAlternateApiUrl($exception, $alternateApiUrl, $environment['LARAVEL_API_URL'] ?? '')) {
+                throw $exception;
+            }
+
+            $retryEnvironment = $environment;
+            $retryEnvironment['LARAVEL_API_URL'] = $alternateApiUrl;
+
+            $this->runCommand($campaignId, $days, $platformId, $retryEnvironment);
+        }
+    }
+
+    private function runCommand(int $campaignId, int $days, ?int $platformId, array $environment): void
+    {
         Process::path(base_path())
             ->forever()
-            ->env($this->environment())
+            ->env($environment)
             ->run($this->command($campaignId, $days, $platformId))
             ->throw();
     }
@@ -50,7 +71,16 @@ class CampaignAiCommentaryRunner
             throw new InvalidArgumentException('Missing configuration: services.internal_api_token.');
         }
 
-        $apiUrl = $this->internalApiUrl();
+        $apiUrl = trim((string) config('services.ai_report_commentary.api_url', ''));
+        if ($apiUrl === '') {
+            $appUrl = rtrim(trim((string) config('app.url')), '/');
+
+            if ($appUrl === '') {
+                throw new InvalidArgumentException('Missing configuration: services.ai_report_commentary.api_url or app.url.');
+            }
+
+            $apiUrl = $appUrl . '/api/internal/v1';
+        }
 
         return [
             'LARAVEL_API_URL' => rtrim($apiUrl, '/'),
@@ -69,43 +99,42 @@ class CampaignAiCommentaryRunner
         return trim((string) config('services.ai_report_commentary.python_binary', 'python')) ?: 'python';
     }
 
-    private function internalApiUrl(): string
-    {
-        $apiUrl = trim((string) config('services.ai_report_commentary.api_url', ''));
-        if ($apiUrl !== '') {
-            return rtrim($apiUrl, '/');
-        }
-
-        $appUrl = rtrim(trim((string) config('app.url')), '/');
-
-        if ($appUrl === '') {
-            throw new InvalidArgumentException('Missing configuration: services.ai_report_commentary.api_url or app.url.');
-        }
-
-        $parsedUrl = parse_url($appUrl);
-
-        if (is_array($parsedUrl) && isset($parsedUrl['scheme'], $parsedUrl['host'])) {
-            $host = strtolower((string) $parsedUrl['host']);
-            $port = isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '';
-
-            if (in_array($host, ['localhost', '127.0.0.1', '::1'], true) && $port === '') {
-                $port = ':8000';
-            }
-
-            return sprintf(
-                '%s://%s%s/api/internal/v1',
-                (string) $parsedUrl['scheme'],
-                (string) $parsedUrl['host'],
-                $port,
-            );
-        }
-
-        return $appUrl . '/api/internal/v1';
-    }
-
     private function pythonModule(): string
     {
         return trim((string) config('services.ai_campaign_commentary.module', 'havas_collectors.ai.campaign_commentary'))
             ?: 'havas_collectors.ai.campaign_commentary';
+    }
+
+    private function alternateLoopbackApiUrl(string $apiUrl): string
+    {
+        if ($apiUrl === '') {
+            return '';
+        }
+
+        if (str_contains($apiUrl, '://127.0.0.1')) {
+            return str_replace('://127.0.0.1', '://localhost', $apiUrl);
+        }
+
+        if (str_contains($apiUrl, '://localhost')) {
+            return str_replace('://localhost', '://127.0.0.1', $apiUrl);
+        }
+
+        return '';
+    }
+
+    private function shouldRetryWithAlternateApiUrl(
+        ProcessFailedException $exception,
+        string $alternateApiUrl,
+        string $currentApiUrl,
+    ): bool {
+        if ($alternateApiUrl === '' || $alternateApiUrl === $currentApiUrl) {
+            return false;
+        }
+
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'WinError 10106')
+            || str_contains($message, 'httpx.ConnectError')
+            || str_contains($message, 'httpcore.ConnectError');
     }
 }
