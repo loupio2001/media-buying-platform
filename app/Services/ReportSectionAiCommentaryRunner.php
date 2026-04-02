@@ -95,7 +95,16 @@ class ReportSectionAiCommentaryRunner
             throw new InvalidArgumentException('Missing configuration: services.internal_api_token.');
         }
 
-        $apiUrl = $this->internalApiUrl();
+        $apiUrl = trim((string) config('services.ai_report_commentary.api_url', ''));
+        if ($apiUrl === '') {
+            $appUrl = rtrim(trim((string) config('app.url')), '/');
+
+            if ($appUrl === '') {
+                throw new InvalidArgumentException('Missing configuration: services.ai_report_commentary.api_url or app.url.');
+            }
+
+            $apiUrl = $appUrl . '/api/internal/v1';
+        }
 
         return [
             'LARAVEL_API_URL' => rtrim($apiUrl, '/'),
@@ -133,40 +142,6 @@ class ReportSectionAiCommentaryRunner
     private function pythonBinary(): string
     {
         return trim((string) config('services.ai_report_commentary.python_binary', 'python')) ?: 'python';
-    }
-
-    private function internalApiUrl(): string
-    {
-        $apiUrl = trim((string) config('services.ai_report_commentary.api_url', ''));
-        if ($apiUrl !== '') {
-            return rtrim($apiUrl, '/');
-        }
-
-        $appUrl = rtrim(trim((string) config('app.url')), '/');
-
-        if ($appUrl === '') {
-            throw new InvalidArgumentException('Missing configuration: services.ai_report_commentary.api_url or app.url.');
-        }
-
-        $parsedUrl = parse_url($appUrl);
-
-        if (is_array($parsedUrl) && isset($parsedUrl['scheme'], $parsedUrl['host'])) {
-            $host = strtolower((string) $parsedUrl['host']);
-            $port = isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '';
-
-            if (in_array($host, ['localhost', '127.0.0.1', '::1'], true) && $port === '') {
-                $port = ':8000';
-            }
-
-            return sprintf(
-                '%s://%s%s/api/internal/v1',
-                (string) $parsedUrl['scheme'],
-                (string) $parsedUrl['host'],
-                $port,
-            );
-        }
-
-        return $appUrl . '/api/internal/v1';
     }
 
     private function projectVenvPythonBinary(): string
