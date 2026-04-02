@@ -3,6 +3,10 @@
 @section('title', 'Brief | Havas Media Buying Platform')
 
 @section('content')
+    @php
+        $briefCurrency = strtoupper((string) ($brief->campaign?->currency ?: 'MAD'));
+    @endphp
+
     <section class="space-y-6">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -33,7 +37,7 @@
         {{-- Brief Details --}}
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             @foreach ([
-                'Budget' => $brief->budget_total ? number_format((float)$brief->budget_total, 0) . ' MAD' : '—',
+                'Budget' => $brief->budget_total ? number_format((float)$brief->budget_total, 0) . ' ' . $briefCurrency : '—',
                 'Flight Start' => $brief->flight_start?->format('d/m/Y') ?? '—',
                 'Flight End' => $brief->flight_end?->format('d/m/Y') ?? '—',
                 'Status' => ucfirst(str_replace('_', ' ', is_object($brief->status) ? $brief->status->value : ($brief->status ?? 'draft'))),
@@ -135,7 +139,7 @@
                                             <td class="py-2 pr-5 text-slate-200">{{ $platform }}</td>
                                             <td class="py-2 pr-5 text-orange-300 font-semibold">{{ $pct }}%</td>
                                             <td class="py-2 text-slate-300">
-                                                {{ $brief->budget_total ? number_format((float)$brief->budget_total * $pct / 100, 0) . ' MAD' : '—' }}
+                                                {{ $brief->budget_total ? number_format((float)$brief->budget_total * $pct / 100, 0) . ' ' . $briefCurrency : '—' }}
                                             </td>
                                         </tr>
                                     @endforeach

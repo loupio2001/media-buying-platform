@@ -3,6 +3,10 @@
 @section('title', $report->title ?? 'Report | Havas Media Buying Platform')
 
 @section('content')
+    @php
+        $reportCurrency = strtoupper((string) ($report->campaign?->currency ?: 'MAD'));
+    @endphp
+
     <section class="space-y-6">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -14,11 +18,23 @@
                 </p>
             </div>
             <div class="flex items-center gap-3">
-                <button id="regen-btn"
-                    data-report-id="{{ $report->id }}"
-                    class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
-                    ↺ Regenerate AI Comments
-                </button>
+                @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                    <a href="{{ route('web.reports.edit', $report) }}" class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
+                        Edit
+                    </a>
+                    <form method="POST" action="{{ route('web.reports.destroy', $report) }}" onsubmit="return confirm('Delete this report permanently?');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="rounded-md border border-rose-700/70 px-4 py-2 text-sm text-rose-200 hover:border-rose-500">
+                            Delete
+                        </button>
+                    </form>
+                    <button id="regen-btn"
+                        data-report-id="{{ $report->id }}"
+                        class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
+                        ↺ Regenerate AI Comments
+                    </button>
+                @endif
                 <a href="{{ route('web.reports.index') }}" class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
                     ← Back
                 </a>
@@ -43,7 +59,7 @@
                     @foreach ([
                         'Impressions' => number_format((int)$section->impressions),
                         'Clicks' => number_format((int)$section->clicks),
-                        'Spend' => number_format((float)$section->spend, 2) . ' MAD',
+                        'Spend' => number_format((float)$section->spend, 2) . ' ' . $reportCurrency,
                         'CTR' => number_format((float)$section->ctr, 2) . '%',
                         'CPM' => number_format((float)$section->cpm, 2),
                         'CPC' => number_format((float)$section->cpc, 2),

@@ -28,6 +28,18 @@ return new class extends Migration
             ['name' => 'Automotive', 'slug' => 'automotive'],
             ['name' => 'Education', 'slug' => 'education'],
             ['name' => 'Government / Public Sector', 'slug' => 'government'],
+            ['name' => 'Construction', 'slug' => 'construction'],
+            ['name' => 'Pharmaceutical / Medical', 'slug' => 'pharmaceutical-medical'],
+            ['name' => 'Research & Development', 'slug' => 'research-development'],
+            ['name' => 'Research', 'slug' => 'research'],
+            ['name' => 'Energy / Utilities', 'slug' => 'energy-utilities'],
+            ['name' => 'Insurance', 'slug' => 'insurance'],
+            ['name' => 'Technology / SaaS', 'slug' => 'technology-saas'],
+            ['name' => 'Beauty / Cosmetics', 'slug' => 'beauty-cosmetics'],
+            ['name' => 'Food & Beverage', 'slug' => 'food-beverage'],
+            ['name' => 'Logistics / Transportation', 'slug' => 'logistics-transportation'],
+            ['name' => 'Luxury', 'slug' => 'luxury'],
+            ['name' => 'Sports / Fitness', 'slug' => 'sports-fitness'],
         ];
 
         foreach ($categories as $category) {

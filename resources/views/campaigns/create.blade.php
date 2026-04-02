@@ -10,16 +10,6 @@
             <p class="mt-2 text-slate-300">Create a local campaign to map and sync platform data.</p>
         </div>
 
-        @if ($errors->any())
-            <div class="rounded-lg border border-rose-700/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
-                <ul class="list-disc space-y-1 pl-4">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <form method="POST" action="{{ route('web.campaigns.store') }}" class="space-y-5 rounded-xl border border-slate-800 bg-slate-900/80 p-6">
             @csrf
 
@@ -65,7 +55,7 @@
                 </div>
 
                 <div>
-                    <label for="total_budget" class="mb-1 block text-sm text-slate-300">Total budget (MAD) <span class="text-rose-400">*</span></label>
+                    <label for="total_budget" class="mb-1 block text-sm text-slate-300">Total budget <span class="text-rose-400">*</span></label>
                     <input type="number" id="total_budget" name="total_budget" value="{{ old('total_budget') }}" min="0" step="0.01" required
                         class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
                 </div>

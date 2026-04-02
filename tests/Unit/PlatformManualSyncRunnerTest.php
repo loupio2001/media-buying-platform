@@ -32,9 +32,26 @@ class PlatformManualSyncRunnerTest extends TestCase
                 && $process->environment['INTERNAL_API_TOKEN'] === 'test-internal-token'
                 && $process->command === [
                     'python3',
-                    '-c',
-                    "from havas_collectors.tasks.celery_app import app; app.send_task('havas_collectors.tasks.pull_tasks.pull_all_active_campaigns')",
+                    '-m',
+                    'havas_collectors.tasks.manual_sync',
+                    '--all',
                 ];
+        });
+    }
+
+    public function test_dispatch_all_falls_back_to_localhost_api_port(): void
+    {
+        config()->set('app.url', 'http://localhost');
+        config()->set('services.internal_api_token', 'test-internal-token');
+        config()->set('services.ai_report_commentary.python_binary', 'python3');
+        config()->set('services.ai_report_commentary.api_url', '');
+
+        Process::fake();
+
+        app(PlatformManualSyncRunner::class)->dispatchAll();
+
+        Process::assertRan(function ($process): bool {
+            return $process->environment['LARAVEL_API_URL'] === 'http://localhost:8000/api/internal/v1';
         });
     }
 
@@ -76,8 +93,10 @@ class PlatformManualSyncRunnerTest extends TestCase
 
         Process::assertRan(fn ($process): bool => $process->command === [
             'python3',
-            '-c',
-            "from havas_collectors.tasks.celery_app import app; app.send_task('havas_collectors.tasks.pull_tasks.pull_connection_campaigns', kwargs={'connection_id': {$connection->id}})",
+            '-m',
+            'havas_collectors.tasks.manual_sync',
+            '--connection-id',
+            (string) $connection->id,
         ]);
     }
 

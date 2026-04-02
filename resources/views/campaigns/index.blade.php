@@ -53,7 +53,7 @@
                             <th class="px-5 py-3 font-medium">Name</th>
                             <th class="px-5 py-3 font-medium">Client</th>
                             <th class="px-5 py-3 font-medium">Status</th>
-                            <th class="px-5 py-3 font-medium">Budget (MAD)</th>
+                            <th class="px-5 py-3 font-medium">Budget</th>
                             <th class="px-5 py-3 font-medium">Actions</th>
                         </tr>
                     </thead>
@@ -63,11 +63,23 @@
                                 <td class="px-5 py-3">{{ $campaign->name }}</td>
                                 <td class="px-5 py-3 text-slate-300">{{ $campaign->client?->name ?? '-' }}</td>
                                 <td class="px-5 py-3 text-slate-300">{{ ucfirst(is_object($campaign->status) ? $campaign->status->value : $campaign->status) }}</td>
-                                <td class="px-5 py-3">{{ number_format((float) $campaign->total_budget, 2, '.', ' ') }}</td>
+                                <td class="px-5 py-3">{{ number_format((float) $campaign->total_budget, 2, '.', ' ') }} {{ strtoupper((string) ($campaign->currency ?: 'MAD')) }}</td>
                                 <td class="px-5 py-3">
                                     <a href="{{ route('web.campaigns.show', $campaign) }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-orange-300 hover:border-orange-300/60">
                                         View
                                     </a>
+                                    @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                                        <a href="{{ route('web.campaigns.edit', $campaign) }}" class="ml-2 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:border-orange-300/60">
+                                            Edit
+                                        </a>
+                                        <form method="POST" action="{{ route('web.campaigns.destroy', $campaign) }}" class="ml-2 inline" onsubmit="return confirm('Delete this campaign permanently?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="rounded-md border border-rose-700/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-rose-200 hover:border-rose-500">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

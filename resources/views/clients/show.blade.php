@@ -12,9 +12,23 @@
                     <p class="mt-1 text-slate-400">{{ $client->category->name }}</p>
                 @endif
             </div>
-            <a href="{{ route('web.clients.index') }}" class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
-                ← Back
-            </a>
+            <div class="flex items-center gap-3">
+                @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                    <a href="{{ route('web.clients.edit', $client) }}" class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
+                        Edit
+                    </a>
+                    <form method="POST" action="{{ route('web.clients.destroy', $client) }}" onsubmit="return confirm('Delete this client permanently?');">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="rounded-md border border-rose-700/70 px-4 py-2 text-sm text-rose-200 hover:border-rose-500">
+                            Delete
+                        </button>
+                    </form>
+                @endif
+                <a href="{{ route('web.clients.index') }}" class="rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-orange-300/60">
+                    ← Back
+                </a>
+            </div>
         </div>
 
         {{-- Client Details --}}
@@ -52,7 +66,7 @@
                                 <tr class="border-t border-slate-800/80 text-slate-200">
                                     <td class="px-5 py-3">{{ $campaign->name }}</td>
                                     <td class="px-5 py-3 text-slate-300">{{ ucfirst(is_object($campaign->status) ? $campaign->status->value : $campaign->status) }}</td>
-                                    <td class="px-5 py-3">{{ number_format((float)$campaign->total_budget, 0) }} MAD</td>
+                                    <td class="px-5 py-3">{{ number_format((float)$campaign->total_budget, 0) }} {{ strtoupper((string) ($campaign->currency ?: 'MAD')) }}</td>
                                     <td class="px-5 py-3 text-slate-400 text-xs">
                                         {{ $campaign->start_date?->format('d/m/Y') }} – {{ $campaign->end_date?->format('d/m/Y') }}
                                     </td>

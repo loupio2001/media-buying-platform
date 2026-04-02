@@ -26,6 +26,14 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _pick_value(mapping: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in mapping:
+            return mapping[key]
+
+    return None
+
+
 def _normalize_customer_id(value: Any) -> str:
     normalized = re.sub(r"\D", "", str(value or ""))
     return normalized
@@ -41,7 +49,7 @@ class GoogleAdsCollector(BaseCollector):
         self._headers: dict[str, str] = {}
         self._api_url_template = os.getenv(
             "GOOGLE_ADS_API_URL",
-            "https://googleads.googleapis.com/v17/customers/{account_id}/googleAds:searchStream",
+            "https://googleads.googleapis.com/v23/customers/{account_id}/googleAds:searchStream",
         )
 
     def authenticate(self, credentials: dict[str, Any]) -> None:
@@ -50,6 +58,7 @@ class GoogleAdsCollector(BaseCollector):
         developer_token = str(
             credentials.get("developer_token")
             or extra_credentials.get("developer_token", "")
+            or os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "")
         )
         login_customer_id = str(
             credentials.get("login_customer_id")
@@ -89,11 +98,12 @@ class GoogleAdsCollector(BaseCollector):
             "ad_group.id, ad_group.name, ad_group.status, "
             "ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.status, "
             "metrics.impressions, metrics.clicks, metrics.cost_micros, "
-            "metrics.conversions, metrics.video_views, "
+            "metrics.conversions, "
             "metrics.interactions, segments.date "
             "FROM ad_group_ad "
             f"WHERE campaign.id = {normalized_campaign_id} "
-            f"AND segments.date BETWEEN '{date_from.isoformat()}' AND '{date_to.isoformat()}'"
+            f'AND segments.date >= "{date_from.isoformat()}" '
+            f'AND segments.date <= "{date_to.isoformat()}"'
         )
 
         response = self.request_json(
@@ -118,28 +128,28 @@ class GoogleAdsCollector(BaseCollector):
         return rows
 
     def normalize_record(self, raw_row: dict[str, Any]) -> NormalizedAdRecord:
-        campaign = _as_dict(raw_row.get("campaign"))
-        ad_group = _as_dict(raw_row.get("ad_group"))
-        ad_group_ad = _as_dict(raw_row.get("ad_group_ad"))
+        campaign = _as_dict(_pick_value(raw_row, "campaign"))
+        ad_group = _as_dict(_pick_value(raw_row, "ad_group", "adGroup"))
+        ad_group_ad = _as_dict(_pick_value(raw_row, "ad_group_ad", "adGroupAd"))
         ad = _as_dict(ad_group_ad.get("ad"))
         metrics = _as_dict(raw_row.get("metrics"))
         segments = _as_dict(raw_row.get("segments"))
 
         return NormalizedAdRecord(
             snapshot_date=to_casablanca_date(segments.get("date", date.today())),
-            ad_set_external_id=str(ad_group.get("id", "")),
-            ad_set_name=str(ad_group.get("name", "Unknown ad group")),
-            ad_external_id=str(ad.get("id", "")),
-            ad_name=str(ad.get("name", "Unknown ad")),
-            ad_status=str(ad_group_ad.get("status", "")).lower() or None,
-            ad_set_status=str(ad_group.get("status", "")).lower() or None,
-            objective=str(campaign.get("advertising_channel_type", "")) or None,
-            impressions=_as_int(metrics.get("impressions")),
-            clicks=_as_int(metrics.get("clicks")),
-            spend=_as_float(metrics.get("cost_micros")) / 1_000_000,
-            conversions=_as_int(metrics.get("conversions")),
-            video_views=_as_int(metrics.get("video_views")),
-            engagement=_as_int(metrics.get("interactions")),
+            ad_set_external_id=str(_pick_value(ad_group, "id") or ""),
+            ad_set_name=str(_pick_value(ad_group, "name") or "Unknown ad group"),
+            ad_external_id=str(_pick_value(ad, "id") or ""),
+            ad_name=str(_pick_value(ad, "name") or "Unknown ad"),
+            ad_status=str(_pick_value(ad_group_ad, "status") or "").lower() or None,
+            ad_set_status=str(_pick_value(ad_group, "status") or "").lower() or None,
+            objective=str(_pick_value(campaign, "advertising_channel_type", "advertisingChannelType") or "") or None,
+            impressions=_as_int(_pick_value(metrics, "impressions")),
+            clicks=_as_int(_pick_value(metrics, "clicks")),
+            spend=_as_float(_pick_value(metrics, "cost_micros", "costMicros")) / 1_000_000,
+            conversions=_as_int(_pick_value(metrics, "conversions")),
+            video_views=_as_int(_pick_value(metrics, "video_views", "videoViews")),
+            engagement=_as_int(_pick_value(metrics, "interactions")),
             custom_metrics={},
             raw_response=raw_row,
         )

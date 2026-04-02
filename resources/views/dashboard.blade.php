@@ -19,12 +19,12 @@
             </article>
 
             <article class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
-                <p class="text-sm text-slate-400">Budget total (MAD)</p>
+                <p class="text-sm text-slate-400">Budget total (toutes devises)</p>
                 <p class="mt-3 text-2xl font-semibold text-white">{{ number_format($summary['total_budget'], 2, '.', ' ') }}</p>
             </article>
 
             <article class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
-                <p class="text-sm text-slate-400">Spend total (MAD)</p>
+                <p class="text-sm text-slate-400">Spend total (toutes devises)</p>
                 <p class="mt-3 text-2xl font-semibold text-white">{{ number_format($summary['total_spend'], 2, '.', ' ') }}</p>
             </article>
 
@@ -51,7 +51,7 @@
                             <th class="px-5 py-3 font-medium">Nom</th>
                             <th class="px-5 py-3 font-medium">Client</th>
                             <th class="px-5 py-3 font-medium">Statut</th>
-                            <th class="px-5 py-3 font-medium">Budget (MAD)</th>
+                            <th class="px-5 py-3 font-medium">Budget</th>
                             <th class="px-5 py-3 font-medium">Periode</th>
                             <th class="px-5 py-3 font-medium">Action</th>
                         </tr>
@@ -70,7 +70,7 @@
                                         {{ ucfirst(is_object($campaign->status) ? $campaign->status->value : $campaign->status) }}
                                     </span>
                                 </td>
-                                <td class="px-5 py-3">{{ number_format((float) $campaign->total_budget, 2, '.', ' ') }}</td>
+                                <td class="px-5 py-3">{{ number_format((float) $campaign->total_budget, 2, '.', ' ') }} {{ strtoupper((string) ($campaign->currency ?: 'MAD')) }}</td>
                                 <td class="px-5 py-3 text-slate-300">
                                     {{ $campaign->start_date?->format('Y-m-d') }} -> {{ $campaign->end_date?->format('Y-m-d') }}
                                 </td>

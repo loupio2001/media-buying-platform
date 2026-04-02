@@ -47,6 +47,10 @@ return [
         'allow_local_fallback' => env('AI_ALLOW_LOCAL_FALLBACK', false),
     ],
 
+    'ai_campaign_commentary' => [
+        'module' => env('AI_CAMPAIGN_COMMENTARY_MODULE', 'havas_collectors.ai.campaign_commentary'),
+    ],
+
     'meta_ads' => [
         'client_id' => env('META_APP_ID'),
         'client_secret' => env('META_APP_SECRET'),

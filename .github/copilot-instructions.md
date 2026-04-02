@@ -27,6 +27,7 @@ This is a media buying campaign management platform for Havas Morocco.
 - Use HasActivityLog trait on all models EXCEPT AdSnapshot, Notification, ActivityLog
 - Use EncryptsAttributes trait on PlatformConnection model
 - Consistent JSON API response: { "data": ..., "meta": ... }
+- User-facing alerts, validation summaries, and loading states should be rendered as bottom-center toasts with manual close controls; avoid inline flash banners for these cases.
 
 ## Coding Standards — Python
 - Python 3.12+, type hints on ALL function signatures

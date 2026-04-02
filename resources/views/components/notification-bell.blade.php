@@ -1,4 +1,4 @@
-<div x-data="notificationBell()" x-init="init()" @keydown.escape.window="closePanel()" x-ref="root" class="relative">
+<div x-data="notificationBell()" @keydown.escape.window="closePanel()" x-ref="root" class="relative">
     <button @click.stop="togglePanel()" class="relative rounded-md border border-slate-700 px-3 py-1.5 hover:border-orange-300/60">
         🔔
         <span x-show="unreadCount > 0" x-text="unreadCount"
@@ -40,39 +40,40 @@
     function notificationBell() {
         return {
             open: false,
-            unreadCount: 0,
+            unreadCount: {{ (int) (auth()->user()?->unreadNotificationCount() ?? 0) }},
             notifications: [],
-            pollTimer: null,
-            outsideClickHandler: null,
-            async init() {
-                await this.fetchNotifications();
-                this.pollTimer = setInterval(() => this.fetchNotifications(), 60000);
-                this.outsideClickHandler = (event) => {
-                    if (!this.open) {
-                        return;
-                    }
-
-                    if (!this.$refs.root.contains(event.target)) {
-                        this.closePanel();
-                    }
-                };
-                document.addEventListener('click', this.outsideClickHandler);
-            },
-            destroy() {
-                if (this.pollTimer) {
-                    clearInterval(this.pollTimer);
-                    this.pollTimer = null;
-                }
-                if (this.outsideClickHandler) {
-                    document.removeEventListener('click', this.outsideClickHandler);
-                    this.outsideClickHandler = null;
-                }
-            },
+            loading: false,
+            loaded: false,
             togglePanel() {
+                if (!this.open && !this.loaded) {
+                    this.loadNotifications();
+                }
                 this.open = !this.open;
             },
             closePanel() {
                 this.open = false;
+            },
+            async loadNotifications() {
+                if (this.loading || this.loaded) {
+                    return;
+                }
+
+                this.loading = true;
+
+                try {
+                    const res = await fetch('/api/notifications?per_page=5', {
+                        headers: { 'Accept': 'application/json' },
+                    });
+                    if (res.ok) {
+                        const json = await res.json();
+                        this.notifications = json.data?.data ?? json.data ?? [];
+                        this.unreadCount = json.meta?.unread_count ?? this.notifications.filter(n => !n.is_read).length;
+                    }
+                } catch (e) {
+                } finally {
+                    this.loaded = true;
+                    this.loading = false;
+                }
             },
             async fetchNotifications() {
                 try {

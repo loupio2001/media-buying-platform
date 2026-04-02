@@ -146,8 +146,9 @@ class WebPlatformConnectionsTest extends TestCase
 
         Process::assertRan(fn ($process): bool => $process->command === [
             'python3',
-            '-c',
-            "from havas_collectors.tasks.celery_app import app; app.send_task('havas_collectors.tasks.pull_tasks.pull_all_active_campaigns')",
+            '-m',
+            'havas_collectors.tasks.manual_sync',
+            '--all',
         ]);
     }
 
@@ -193,8 +194,10 @@ class WebPlatformConnectionsTest extends TestCase
 
         Process::assertRan(fn ($process): bool => $process->command === [
             'python3',
-            '-c',
-            "from havas_collectors.tasks.celery_app import app; app.send_task('havas_collectors.tasks.pull_tasks.pull_connection_campaigns', kwargs={'connection_id': {$connection->id}})",
+            '-m',
+            'havas_collectors.tasks.manual_sync',
+            '--connection-id',
+            (string) $connection->id,
         ]);
     }
 }

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Web\StoreClientWebRequest;
+use App\Http\Requests\Web\UpdateClientWebRequest;
 use App\Models\Category;
 use App\Models\Client;
 use App\Services\Api\ClientApiService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 
 class ClientWebController extends Controller
 {
@@ -28,22 +30,31 @@ class ClientWebController extends Controller
         return view('clients.create', compact('categories'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreClientWebRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
-            'industry' => ['nullable', 'string', 'max:255'],
-            'contact_name' => ['nullable', 'string', 'max:255'],
-            'contact_email' => ['nullable', 'email', 'max:255'],
-            'contact_phone' => ['nullable', 'string', 'max:50'],
-        ]);
+        $data = $request->validated();
 
         $client = $this->clientApiService->store($data);
 
         return redirect()
             ->route('web.clients.show', $client->id)
             ->with('status', 'Client created successfully.');
+    }
+
+    public function edit(Client $client): View
+    {
+        $categories = Category::query()->orderBy('name')->get();
+
+        return view('clients.edit', compact('client', 'categories'));
+    }
+
+    public function update(UpdateClientWebRequest $request, Client $client): RedirectResponse
+    {
+        $this->clientApiService->update($client, $request->validated());
+
+        return redirect()
+            ->route('web.clients.show', $client)
+            ->with('status', 'Client updated successfully.');
     }
 
     public function show(int $client): View
@@ -53,5 +64,20 @@ class ClientWebController extends Controller
             ->findOrFail($client);
 
         return view('clients.show', compact('client'));
+    }
+
+    public function destroy(Client $client): RedirectResponse
+    {
+        try {
+            $this->clientApiService->delete($client);
+
+            return redirect()
+                ->route('web.clients.index')
+                ->with('status', 'Client removed successfully.');
+        } catch (QueryException) {
+            return redirect()
+                ->route('web.clients.show', $client)
+                ->with('error', 'Client cannot be deleted because related records still exist.');
+        }
     }
 }

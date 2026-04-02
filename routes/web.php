@@ -123,6 +123,16 @@ Route::middleware('auth')->group(function () {
             '/settings/platform-connections/{platform}/callback',
             [PlatformConnectionOAuthController::class, 'handleProviderCallback']
         )->name('web.platform-connections.oauth.callback');
+
+        Route::get(
+            '/settings/platform-connections/{platform}/choose-customer',
+            [PlatformConnectionOAuthController::class, 'showGoogleCustomerSelection']
+        )->name('web.platform-connections.oauth.google.select');
+
+        Route::post(
+            '/settings/platform-connections/{platform}/choose-customer',
+            [PlatformConnectionOAuthController::class, 'confirmGoogleCustomerSelection']
+        )->name('web.platform-connections.oauth.google.confirm');
     });
 
     // Admin-only routes

@@ -58,7 +58,7 @@ def test_google_collector_builds_sanitized_headers_and_query(monkeypatch: pytest
 
     assert rows == []
     assert observed["method"] == "POST"
-    assert observed["url"] == "https://googleads.googleapis.com/v17/customers/1234567890/googleAds:searchStream"
+    assert observed["url"] == "https://googleads.googleapis.com/v23/customers/1234567890/googleAds:searchStream"
     assert observed["headers"] == {
         "Authorization": "Bearer token",
         "developer-token": "dev-token",
@@ -67,6 +67,9 @@ def test_google_collector_builds_sanitized_headers_and_query(monkeypatch: pytest
     }
     assert observed["params"] is None
     assert "WHERE campaign.id = 987654321" in observed["json_body"]["query"]
+    assert 'segments.date >= "2026-03-01"' in observed["json_body"]["query"]
+    assert 'segments.date <= "2026-03-03"' in observed["json_body"]["query"]
+    assert "metrics.video_views" not in observed["json_body"]["query"]
 
     collector.close()
 
@@ -89,5 +92,49 @@ def test_google_collector_normalizes_partial_payload_safely() -> None:
     assert normalized.impressions == 0
     assert normalized.clicks == 0
     assert normalized.spend == 0.0
+
+    collector.close()
+
+
+def test_google_collector_normalizes_google_ads_camel_case_payload() -> None:
+    collector = GoogleAdsCollector(laravel_client=_NoopLaravelClient())
+
+    normalized = collector.normalize_record(
+        {
+            "campaign": {
+                "advertisingChannelType": "SEARCH",
+                "name": "Campaign A",
+            },
+            "adGroup": {
+                "id": "123",
+                "name": "Ad Group A",
+                "status": "ENABLED",
+            },
+            "adGroupAd": {
+                "status": "ENABLED",
+                "ad": {
+                    "id": "456",
+                    "name": "Ad A",
+                },
+            },
+            "metrics": {
+                "impressions": 12,
+                "clicks": 3,
+                "costMicros": 1234567,
+                "conversions": 1,
+                "interactions": 4,
+            },
+            "segments": {
+                "date": "2026-04-02",
+            },
+        }
+    )
+
+    assert normalized.ad_set_external_id == "123"
+    assert normalized.ad_external_id == "456"
+    assert normalized.objective == "SEARCH"
+    assert normalized.impressions == 12
+    assert normalized.clicks == 3
+    assert normalized.spend == 1.234567
 
     collector.close()

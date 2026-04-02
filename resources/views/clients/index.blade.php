@@ -36,6 +36,18 @@
                                     <a href="{{ route('web.clients.show', $client) }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-orange-300 hover:border-orange-300/60">
                                         View
                                     </a>
+                                    @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                                        <a href="{{ route('web.clients.edit', $client) }}" class="ml-2 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:border-orange-300/60">
+                                            Edit
+                                        </a>
+                                        <form method="POST" action="{{ route('web.clients.destroy', $client) }}" class="ml-2 inline" onsubmit="return confirm('Delete this client permanently?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="rounded-md border border-rose-700/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-rose-200 hover:border-rose-500">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

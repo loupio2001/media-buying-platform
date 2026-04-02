@@ -39,6 +39,10 @@
                                 <td class="px-5 py-3">
                                     @php
                                         $statusColor = match($report->status) {
+                                            'exported' => 'text-emerald-300 border-emerald-700/50 bg-emerald-900/20',
+                                            'reviewed' => 'text-sky-300 border-sky-700/50 bg-sky-900/20',
+                                            'draft' => 'text-slate-300 border-slate-700 bg-slate-800/40',
+                                            // Legacy-compatible mapping for older data
                                             'ready' => 'text-emerald-300 border-emerald-700/50 bg-emerald-900/20',
                                             'processing' => 'text-yellow-300 border-yellow-700/50 bg-yellow-900/20',
                                             'failed' => 'text-rose-300 border-rose-700/50 bg-rose-900/20',
@@ -54,6 +58,18 @@
                                     <a href="{{ route('web.reports.show', $report) }}" class="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-orange-300 hover:border-orange-300/60">
                                         View
                                     </a>
+                                    @if (auth()->user()->isAdmin() || auth()->user()->isManager())
+                                        <a href="{{ route('web.reports.edit', $report) }}" class="ml-2 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:border-orange-300/60">
+                                            Edit
+                                        </a>
+                                        <form method="POST" action="{{ route('web.reports.destroy', $report) }}" class="ml-2 inline" onsubmit="return confirm('Delete this report permanently?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="rounded-md border border-rose-700/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-rose-200 hover:border-rose-500">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

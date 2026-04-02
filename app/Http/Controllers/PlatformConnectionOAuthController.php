@@ -6,6 +6,7 @@ use App\Models\Platform;
 use App\Services\PlatformOAuth\GoogleOAuthService;
 use App\Services\PlatformOAuth\MetaOAuthService;
 use App\Services\PlatformOAuth\TikTokOAuthService;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -81,6 +82,11 @@ class PlatformConnectionOAuthController extends Controller
             $platformModel = Platform::query()->where('slug', $platform)->firstOrFail();
             $service       = $this->resolveService($platform);
             $tokenPayload  = $service->exchangeCodeForToken($code, $redirectUri);
+
+            if ($platform === 'google') {
+                return $this->handleGoogleCallback($request, $platformModel, $service, $tokenPayload);
+            }
+
             $accountPayload = $service->fetchPrimaryAdAccount((string) $tokenPayload['access_token']);
 
             $connection = $service->upsertConnection(
@@ -100,6 +106,96 @@ class PlatformConnectionOAuthController extends Controller
         return redirect()
             ->route('web.platform-connections.index')
             ->with('status', ucfirst($platform) . ' connection synced successfully (connection #' . $connection->id . ').');
+    }
+
+    public function showGoogleCustomerSelection(string $platform, Request $request): View|RedirectResponse
+    {
+        $this->assertSupported($platform);
+
+        if ($platform !== 'google') {
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', 'Customer selection is only available for Google Ads OAuth.');
+        }
+
+        $pending = $this->pullGooglePendingState($request, false);
+        if ($pending === null) {
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', 'Your Google Ads connection session expired. Please restart the OAuth flow.');
+        }
+
+        if ((int) ($pending['user_id'] ?? 0) !== (int) $request->user()->id) {
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', 'Your Google Ads connection session is no longer valid. Please restart the OAuth flow.');
+        }
+
+        return view('settings.platform-connections.google-customer-selection', [
+            'platform' => $platform,
+            'customers' => $pending['customers'],
+        ]);
+    }
+
+    public function confirmGoogleCustomerSelection(string $platform, Request $request): RedirectResponse
+    {
+        $this->assertSupported($platform);
+
+        if ($platform !== 'google') {
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', 'Customer selection is only available for Google Ads OAuth.');
+        }
+
+        $pending = $this->pullGooglePendingState($request, false);
+        if ($pending === null) {
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', 'Your Google Ads connection session expired. Please restart the OAuth flow.');
+        }
+
+        if ((int) ($pending['user_id'] ?? 0) !== (int) $request->user()->id) {
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', 'Your Google Ads connection session is no longer valid. Please restart the OAuth flow.');
+        }
+
+        $validated = $request->validate([
+            'account_id' => ['required', 'string'],
+        ]);
+
+        $selectedAccount = collect($pending['customers'])
+            ->firstWhere('account_id', $validated['account_id']);
+
+        if (! is_array($selectedAccount)) {
+            return redirect()
+                ->route('web.platform-connections.oauth.google.select', ['platform' => 'google'])
+                ->with('error', 'Please choose one of the accessible Google Ads customer IDs.');
+        }
+
+        try {
+            $platformModel = Platform::query()->where('slug', $platform)->firstOrFail();
+            $service = $this->resolveService($platform);
+
+            $connection = $service->upsertConnection(
+                platformId: (int) $platformModel->id,
+                userId: (int) $request->user()->id,
+                tokenPayload: $pending['token_payload'],
+                accountPayload: $selectedAccount,
+            );
+
+            $request->session()->forget('platform_oauth.google.pending');
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('web.platform-connections.index')
+            ->with('status', 'Google connection synced successfully for customer ' . $selectedAccount['account_id'] . ' (connection #' . $connection->id . ').');
     }
 
     // -------------------------------------------------------------------------
@@ -129,5 +225,62 @@ class PlatformConnectionOAuthController extends Controller
         return $configured !== ''
             ? $configured
             : route('web.platform-connections.oauth.callback', ['platform' => $platform], true);
+    }
+
+    /**
+     * @return array{user_id:int,platform_id:int,token_payload:array,customers:array<int,array{account_id:string,account_name:string}>}|null
+     */
+    private function pullGooglePendingState(Request $request, bool $forget = true): ?array
+    {
+        $key = 'platform_oauth.google.pending';
+
+        $pending = $forget ? $request->session()->pull($key) : $request->session()->get($key);
+
+        if (! is_array($pending)) {
+            return null;
+        }
+
+        $tokenPayload = $pending['token_payload'] ?? null;
+        $customers = $pending['customers'] ?? null;
+
+        if (! is_array($tokenPayload) || ! is_array($customers) || $customers === []) {
+            return null;
+        }
+
+        return [
+            'user_id' => (int) ($pending['user_id'] ?? 0),
+            'platform_id' => (int) ($pending['platform_id'] ?? 0),
+            'token_payload' => $tokenPayload,
+            'customers' => array_values(array_filter($customers, static fn ($customer): bool => is_array($customer))),
+        ];
+    }
+
+    private function handleGoogleCallback(Request $request, Platform $platformModel, GoogleOAuthService $service, array $tokenPayload): RedirectResponse
+    {
+        $customers = $service->listAccessibleAdAccounts((string) $tokenPayload['access_token']);
+
+        if (count($customers) === 1) {
+            $connection = $service->upsertConnection(
+                platformId: (int) $platformModel->id,
+                userId: (int) $request->user()->id,
+                tokenPayload: $tokenPayload,
+                accountPayload: $customers[0],
+            );
+
+            return redirect()
+                ->route('web.platform-connections.index')
+                ->with('status', 'Google connection synced successfully for customer ' . $customers[0]['account_id'] . ' (connection #' . $connection->id . ').');
+        }
+
+        $request->session()->put('platform_oauth.google.pending', [
+            'user_id' => (int) $request->user()->id,
+            'platform_id' => (int) $platformModel->id,
+            'token_payload' => $tokenPayload,
+            'customers' => $customers,
+        ]);
+
+        return redirect()
+            ->route('web.platform-connections.oauth.google.select', ['platform' => 'google'])
+            ->with('status', 'Select the Google Ads customer ID to link.');
     }
 }

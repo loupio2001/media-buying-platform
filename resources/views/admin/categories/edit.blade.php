@@ -15,16 +15,6 @@
             </a>
         </div>
 
-        @if ($errors->any())
-            <div class="rounded-lg border border-rose-700/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
-                <ul class="list-disc pl-4 space-y-1">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <form method="POST" action="{{ route('web.admin.categories.update', $category) }}">
             @csrf
             @method('PATCH')

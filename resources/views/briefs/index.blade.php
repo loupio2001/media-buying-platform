@@ -33,7 +33,7 @@
                             <tr class="border-t border-slate-800/80 text-slate-200">
                                 <td class="px-5 py-3">{{ $brief->campaign?->name ?? '-' }}</td>
                                 <td class="px-5 py-3 text-slate-300 max-w-xs truncate">{{ $brief->objective ?? '-' }}</td>
-                                <td class="px-5 py-3">{{ $brief->budget_total ? number_format((float)$brief->budget_total, 0) . ' MAD' : '-' }}</td>
+                                <td class="px-5 py-3">{{ $brief->budget_total ? number_format((float)$brief->budget_total, 0) . ' ' . strtoupper((string) ($brief->campaign?->currency ?: 'MAD')) : '-' }}</td>
                                 <td class="px-5 py-3">
                                     @php
                                         $status = is_object($brief->status) ? $brief->status->value : $brief->status;

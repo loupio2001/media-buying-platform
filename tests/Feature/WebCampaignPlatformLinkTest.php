@@ -160,4 +160,32 @@ class WebCampaignPlatformLinkTest extends TestCase
 
         $this->assertSame(0, CampaignPlatform::query()->count());
     }
+
+    public function test_edit_campaign_unlinks_platform_when_no_connector_exists_for_source_platform(): void
+    {
+        /** @var User $admin */
+        $admin = User::factory()->admin()->create();
+        $campaign = Campaign::factory()->create(['created_by' => $admin->id]);
+        $platform = Platform::factory()->create();
+
+        $campaignPlatform = CampaignPlatform::query()->create([
+            'campaign_id' => $campaign->id,
+            'platform_id' => $platform->id,
+            'platform_connection_id' => null,
+            'external_campaign_id' => 'orphan-ext-id',
+            'budget' => 1000,
+            'budget_type' => 'lifetime',
+            'currency' => 'MAD',
+            'is_active' => true,
+            'last_sync_at' => null,
+            'notes' => null,
+        ]);
+
+        $this->assertDatabaseHas('campaign_platforms', ['id' => $campaignPlatform->id]);
+
+        $response = $this->actingAs($admin)->get(route('web.campaigns.edit', $campaign));
+
+        $response->assertOk();
+        $this->assertDatabaseMissing('campaign_platforms', ['id' => $campaignPlatform->id]);
+    }
 }

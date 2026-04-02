@@ -1,5 +1,32 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+    @php
+        $initialToasts = [];
+
+        if (session('status')) {
+            $initialToasts[] = [
+                'type' => 'success',
+                'title' => 'Success',
+                'message' => session('status'),
+            ];
+        }
+
+        if (session('error')) {
+            $initialToasts[] = [
+                'type' => 'error',
+                'title' => 'Error',
+                'message' => session('error'),
+            ];
+        }
+
+        if ($errors->any()) {
+            $initialToasts[] = [
+                'type' => 'error',
+                'title' => 'Validation error',
+                'message' => implode(' ', $errors->all()),
+            ];
+        }
+    @endphp
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -67,20 +94,43 @@
             </header>
 
             <main class="relative mx-auto w-full max-w-6xl px-6 py-10 sm:px-8">
-                @if (session('status'))
-                    <div class="mb-6 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-4 py-3 text-sm text-emerald-200">
-                        {{ session('status') }}
-                    </div>
-                @endif
-
-                @if (session('error'))
-                    <div class="mb-6 rounded-lg border border-rose-700/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
-                        {{ session('error') }}
-                    </div>
-                @endif
-
                 @yield('content')
             </main>
+
+            <div
+                x-data="toastStack()"
+                x-init="init()"
+                class="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 sm:bottom-8"
+            >
+                <div class="flex w-full max-w-md flex-col gap-3">
+                    <template x-for="toast in toasts" :key="toast.id">
+                        <div
+                            class="pointer-events-auto rounded-xl border px-4 py-3 shadow-2xl backdrop-blur"
+                            :class="toastClasses(toast.type)"
+                        >
+                            <div class="flex items-start gap-3">
+                                <div class="mt-1 h-2.5 w-2.5 rounded-full" :class="toastDotClasses(toast.type)"></div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-semibold text-white" x-text="toast.title"></p>
+                                    <p class="mt-1 text-sm leading-6 text-slate-200" x-text="toast.message"></p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="rounded-md px-2 py-1 text-lg leading-none text-slate-300 transition hover:text-white"
+                                    @click="remove(toast.id)"
+                                    aria-label="Close toast"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
+
+        <script>
+            window.__initialToasts = @json($initialToasts);
+        </script>
     </body>
 </html>

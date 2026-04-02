@@ -9,16 +9,6 @@
             <h1 class="mt-2 text-3xl font-semibold text-white">Create Brief</h1>
         </div>
 
-        @if ($errors->any())
-            <div class="rounded-lg border border-rose-700/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
-                <ul class="list-disc pl-4 space-y-1">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
         <form method="POST" action="{{ route('web.briefs.store') }}" class="space-y-5 rounded-xl border border-slate-800 bg-slate-900/80 p-6">
             @csrf
 
@@ -50,7 +40,7 @@
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label for="budget_total" class="mb-1 block text-sm text-slate-300">Total Budget (MAD)</label>
+                    <label for="budget_total" class="mb-1 block text-sm text-slate-300">Total Budget</label>
                     <input type="number" id="budget_total" name="budget_total" value="{{ old('budget_total') }}" min="0" step="0.01"
                         class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
                 </div>

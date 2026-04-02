@@ -16,6 +16,7 @@ class PlatformConnectionSettingsService
             ->with([
                 'connections' => fn ($query) => $query
                     ->with('creator:id,name')
+                    ->withCount('campaignPlatforms')
                     ->orderByDesc('updated_at'),
             ])
             ->get();

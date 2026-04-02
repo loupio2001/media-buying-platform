@@ -3,13 +3,15 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Web\StoreReportWebRequest;
+use App\Http\Requests\Web\UpdateReportWebRequest;
 use App\Models\Campaign;
 use App\Models\Report;
 use App\Services\Api\ReportApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Throwable;
 
 class ReportWebController extends Controller
@@ -30,20 +32,31 @@ class ReportWebController extends Controller
         return view('reports.create', compact('campaigns'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreReportWebRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'campaign_id' => ['required', 'integer', 'exists:campaigns,id'],
-            'type' => ['required', 'string', 'in:weekly,monthly,campaign'],
-            'period_start' => ['required', 'date'],
-            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
-        ]);
+        $data = $request->validated();
 
         $report = $this->reportApiService->store($data, (int) $request->user()->id);
 
         return redirect()
             ->route('web.reports.show', $report->id)
             ->with('status', 'Report created successfully.');
+    }
+
+    public function edit(Report $report): View
+    {
+        $campaigns = Campaign::query()->with('client:id,name')->orderBy('name')->get();
+
+        return view('reports.edit', compact('report', 'campaigns'));
+    }
+
+    public function update(UpdateReportWebRequest $request, Report $report): RedirectResponse
+    {
+        $this->reportApiService->update($report, $request->validated());
+
+        return redirect()
+            ->route('web.reports.show', $report)
+            ->with('status', 'Report updated successfully.');
     }
 
     public function show(int $report): View
@@ -71,6 +84,21 @@ class ReportWebController extends Controller
                 'message' => 'Failed to regenerate AI comments.',
                 'error' => config('app.debug') ? $this->sanitizeErrorForJson($exception->getMessage()) : null,
             ], 500);
+        }
+    }
+
+    public function destroy(Report $report): RedirectResponse
+    {
+        try {
+            $this->reportApiService->delete($report);
+
+            return redirect()
+                ->route('web.reports.index')
+                ->with('status', 'Report removed successfully.');
+        } catch (QueryException) {
+            return redirect()
+                ->route('web.reports.show', $report)
+                ->with('error', 'Report cannot be deleted because related records still exist.');
         }
     }
 

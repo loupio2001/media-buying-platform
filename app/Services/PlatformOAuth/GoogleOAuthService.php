@@ -11,7 +11,7 @@ class GoogleOAuthService
 {
     private const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-    private const CUSTOMERS_URL = 'https://googleads.googleapis.com/v17/customers:listAccessibleCustomers';
+    private const CUSTOMERS_URL = 'https://googleads.googleapis.com/v23/customers:listAccessibleCustomers';
 
     public function buildAuthorizeUrl(string $state, string $redirectUri): string
     {
@@ -53,6 +53,8 @@ class GoogleOAuthService
         }
 
         $response = Http::retry(2, 500)
+            ->timeout(15)
+            ->connectTimeout(5)
             ->asForm()
             ->post(self::TOKEN_URL, [
                 'client_id' => $clientId,
@@ -81,9 +83,9 @@ class GoogleOAuthService
     }
 
     /**
-     * @return array{account_id:string,account_name:string}
+     * @return array<int, array{account_id:string,account_name:string}>
      */
-    public function fetchPrimaryAdAccount(string $accessToken): array
+    public function listAccessibleAdAccounts(string $accessToken): array
     {
         $developerToken = (string) config('services.google_ads.developer_token', '');
 
@@ -93,6 +95,8 @@ class GoogleOAuthService
         }
 
         $response = Http::retry(2, 500)
+            ->timeout(15)
+            ->connectTimeout(5)
             ->withHeaders($headers)
             ->get(self::CUSTOMERS_URL);
 
@@ -105,18 +109,39 @@ class GoogleOAuthService
             throw new RuntimeException('No Google Ads customer found for this account.');
         }
 
-        // resourceNames look like "customers/1234567890"
-        $resourceName = is_string($resourceNames[0]) ? $resourceNames[0] : '';
-        $accountId = str_replace('customers/', '', $resourceName);
+        $accounts = [];
 
-        if ($accountId === '' || $accountId === $resourceName) {
-            throw new RuntimeException('Google Ads response missing valid customer resource name.');
+        foreach ($resourceNames as $resourceName) {
+            if (! is_string($resourceName)) {
+                continue;
+            }
+
+            // resourceNames look like "customers/1234567890"
+            $accountId = str_replace('customers/', '', $resourceName);
+
+            if ($accountId === '' || $accountId === $resourceName) {
+                continue;
+            }
+
+            $accounts[] = [
+                'account_id' => $accountId,
+                'account_name' => 'Google Ads Account ' . $accountId,
+            ];
         }
 
-        return [
-            'account_id' => $accountId,
-            'account_name' => 'Google Ads Account ' . $accountId,
-        ];
+        if ($accounts === []) {
+            throw new RuntimeException('Google Ads response missing valid customer resource names.');
+        }
+
+        return $accounts;
+    }
+
+    /**
+     * @return array{account_id:string,account_name:string}
+     */
+    public function fetchPrimaryAdAccount(string $accessToken): array
+    {
+        return $this->listAccessibleAdAccounts($accessToken)[0];
     }
 
     public function upsertConnection(
@@ -137,7 +162,10 @@ class GoogleOAuthService
         $connection->account_name = (string) $accountPayload['account_name'];
         $connection->auth_type = 'oauth2';
         $connection->access_token = (string) $tokenPayload['access_token'];
-        $connection->refresh_token = $tokenPayload['refresh_token'] ?? null;
+        $newRefreshToken = (string) ($tokenPayload['refresh_token'] ?? '');
+        if ($newRefreshToken !== '') {
+            $connection->refresh_token = $newRefreshToken;
+        }
         $connection->token_expires_at = isset($tokenPayload['expires_in'])
             ? now()->addSeconds((int) $tokenPayload['expires_in'])
             : null;

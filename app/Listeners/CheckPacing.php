@@ -29,12 +29,13 @@ class CheckPacing
 
         $platformName = $cp->platform->name;
         $campaignName = $cp->campaign->name;
+        $currency = strtoupper((string) ($cp->currency ?: $cp->campaign?->currency ?: 'MAD'));
 
         $this->notifier->notifyAll(
             type: 'budget_warning',
             severity: $flag['severity'],
             title: "Budget pacing alert: {$platformName}",
-            message: "{$campaignName}: {$flag['budget_pct_used']}% budget used with {$flag['days_remaining']} days remaining. Projected overspend: {$flag['projected_overspend']} MAD",
+            message: "{$campaignName}: {$flag['budget_pct_used']}% budget used with {$flag['days_remaining']} days remaining. Projected overspend: {$flag['projected_overspend']} {$currency}",
             entityType: 'campaigns',
             entityId: $cp->campaign_id,
             meta: $flag,

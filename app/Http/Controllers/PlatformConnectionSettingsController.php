@@ -26,6 +26,13 @@ class PlatformConnectionSettingsController extends Controller
     public function index(): View
     {
         $platforms = $this->settingsService->platformsWithConnections();
+        $googleAdsConfig = [
+            'client_id_configured' => (string) config('services.google_ads.client_id', '') !== '',
+            'client_secret_configured' => (string) config('services.google_ads.client_secret', '') !== '',
+            'developer_token_configured' => (string) config('services.google_ads.developer_token', '') !== '',
+            'redirect_uri' => (string) (config('services.google_ads.redirect_uri') ?: route('web.platform-connections.oauth.callback', ['platform' => 'google'], true)),
+            'scopes' => (array) config('services.google_ads.scopes', []),
+        ];
 
         return view('settings.platform-connections.index', [
             'platforms' => $platforms,
@@ -35,6 +42,7 @@ class PlatformConnectionSettingsController extends Controller
                 ->mapWithKeys(fn (PlatformConnection $connection) => [
                     $connection->id => $this->settingsService->healthLabel($connection),
                 ]),
+            'googleAdsConfig' => $googleAdsConfig,
         ]);
     }
 
@@ -81,7 +89,7 @@ class PlatformConnectionSettingsController extends Controller
 
         return redirect()
             ->to($redirectTo)
-            ->with('status', 'Manual sync has been dispatched for all active platform campaigns.');
+            ->with('status', 'Manual sync started in the background for all active platform campaigns.');
     }
 
     public function syncConnection(PlatformConnection $platformConnection): RedirectResponse
@@ -100,13 +108,18 @@ class PlatformConnectionSettingsController extends Controller
 
         return redirect()
             ->to($redirectTo)
-            ->with('status', 'Manual sync has been dispatched for the selected platform connection.');
+            ->with('status', 'Manual sync started in the background for the selected platform connection.');
     }
 
     private function syncErrorMessage(Throwable $exception): string
     {
         if ($exception instanceof ProcessFailedException) {
             $stderr = trim((string) $exception->result->errorOutput());
+
+            if ($this->isGoogleAdsCustomerDisabledError($stderr)) {
+                return 'Google Ads rejected the selected customer account because it is not enabled or has been deactivated. Re-activate that Google Ads customer, confirm the campaign is linked to an active customer ID, and if the account is managed through an MCC, make sure the correct login_customer_id is configured.';
+            }
+
             if ($stderr !== '') {
                 $summary = Str::of($stderr)
                     ->replaceMatches('/\s+/', ' ')
@@ -116,9 +129,22 @@ class PlatformConnectionSettingsController extends Controller
                 return 'Manual sync dispatch failed: ' . $summary;
             }
 
-            return 'Manual sync dispatch failed. Check that Redis is running and collectors are configured (DB_USER/DB_NAME, REDIS_URL, PYTHON_BIN).';
+            return 'Manual sync dispatch failed. Check the collector configuration (DB_USER/DB_NAME, LARAVEL_API_URL, INTERNAL_API_TOKEN, Google Ads credentials).';
         }
 
         return 'Manual sync dispatch failed: ' . mb_substr($exception->getMessage(), 0, 300);
+    }
+
+    private function isGoogleAdsCustomerDisabledError(string $stderr): bool
+    {
+        if ($stderr === '') {
+            return false;
+        }
+
+        return Str::contains($stderr, [
+            'CUSTOMER_NOT_ENABLED',
+            'The customer account can\'t be accessed because it is not yet enabled or has been deactivated.',
+            'PERMISSION_DENIED',
+        ]);
     }
 }

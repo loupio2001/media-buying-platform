@@ -13,7 +13,7 @@
                 </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <form method="POST" action="{{ route('web.platform-connections.sync-all', [], false) }}">
+                <form method="POST" action="{{ route('web.platform-connections.sync-all', [], false) }}" data-toast-loading="Manual sync started for all active platform campaigns." data-toast-loading-title="Starting sync">
                     @csrf
                     <button type="submit" class="inline-flex items-center justify-center rounded-md border border-sky-300/60 px-4 py-2 text-sm font-semibold text-sky-200 hover:bg-sky-400/10">
                         Force Sync Now
@@ -23,19 +23,56 @@
                    class="inline-flex items-center justify-center rounded-md border border-orange-300/60 px-4 py-2 text-sm font-semibold text-orange-200 hover:bg-orange-400/10">
                     Connect Meta OAuth
                 </a>
+                <a href="{{ route('web.platform-connections.oauth.authorize', ['platform' => 'google'], false) }}"
+                   class="inline-flex items-center justify-center rounded-md border border-emerald-300/60 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/10">
+                    Connect Google Ads OAuth
+                </a>
             </div>
         </div>
 
-        @if ($errors->any())
-            <div class="rounded-lg border border-rose-700/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
-                <p class="font-semibold">Validation errors</p>
-                <ul class="mt-2 list-disc space-y-1 pl-5">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+        <section class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="space-y-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">Google Ads</h2>
+                        <p class="mt-1 text-sm text-slate-300">
+                            OAuth + API setup read from `.env` and used by the Google Ads connector.
+                        </p>
+                        <p class="mt-1 text-xs text-slate-400">
+                            After OAuth, you will choose the Google Ads customer ID to link when several accounts are available.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        <span class="rounded-full border px-3 py-1 {{ $googleAdsConfig['client_id_configured'] ? 'border-emerald-400/50 text-emerald-200' : 'border-rose-400/50 text-rose-200' }}">
+                            Client ID: {{ $googleAdsConfig['client_id_configured'] ? 'OK' : 'Missing' }}
+                        </span>
+                        <span class="rounded-full border px-3 py-1 {{ $googleAdsConfig['client_secret_configured'] ? 'border-emerald-400/50 text-emerald-200' : 'border-rose-400/50 text-rose-200' }}">
+                            Secret: {{ $googleAdsConfig['client_secret_configured'] ? 'OK' : 'Missing' }}
+                        </span>
+                        <span class="rounded-full border px-3 py-1 {{ $googleAdsConfig['developer_token_configured'] ? 'border-emerald-400/50 text-emerald-200' : 'border-rose-400/50 text-rose-200' }}">
+                            Developer token: {{ $googleAdsConfig['developer_token_configured'] ? 'OK' : 'Missing' }}
+                        </span>
+                    </div>
+                </div>
+
+                <a href="{{ route('web.platform-connections.oauth.authorize', ['platform' => 'google'], false) }}"
+                   class="inline-flex items-center justify-center rounded-md border border-emerald-300/60 px-4 py-2 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/10">
+                    Start Google OAuth
+                </a>
             </div>
-        @endif
+
+            <div class="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Redirect URI</p>
+                    <p class="mt-1 break-all text-slate-100">{{ $googleAdsConfig['redirect_uri'] }}</p>
+                </div>
+                <div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                    <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Scopes</p>
+                    <p class="mt-1 text-slate-100">{{ $googleAdsConfig['scopes'] ? implode(', ', $googleAdsConfig['scopes']) : 'n/a' }}</p>
+                </div>
+            </div>
+        </section>
 
         <section class="rounded-xl border border-slate-800 bg-slate-900/80 p-5">
             <h2 class="text-lg font-semibold text-white">Add manual connection</h2>
@@ -73,6 +110,21 @@
                 <label class="space-y-2 text-sm text-slate-300 md:col-span-2">
                     <span>API Key (required for api_key auth)</span>
                     <input type="text" name="api_key" class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100" placeholder="Only used for api_key">
+                </label>
+
+                <label class="space-y-2 text-sm text-slate-300 md:col-span-2">
+                    <span>Access Token (required for oauth2 auth)</span>
+                    <textarea name="access_token" rows="3" class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100" placeholder="OAuth2 access token"></textarea>
+                </label>
+
+                <label class="space-y-2 text-sm text-slate-300 md:col-span-2">
+                    <span>Refresh Token (optional for oauth2 auth)</span>
+                    <input type="text" name="refresh_token" class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100" placeholder="OAuth2 refresh token">
+                </label>
+
+                <label class="space-y-2 text-sm text-slate-300">
+                    <span>Token Expires At (optional)</span>
+                    <input type="datetime-local" name="token_expires_at" class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">
                 </label>
 
                 <div class="md:col-span-2">
@@ -113,8 +165,10 @@
                                     <td class="px-5 py-3">{{ $healthLabels[$connection->id] ?? 'Unknown' }}</td>
                                     <td class="px-5 py-3 text-slate-300">
                                         {{ $connection->last_sync_at?->format('Y-m-d H:i') ?? '-' }}
+                                        <span class="ml-2 text-xs text-slate-500">{{ (int) ($connection->campaign_platforms_count ?? 0) }} linked</span>
                                     </td>
                                     <td class="px-5 py-3">
+                                        @php $hasLinkedCampaigns = (int) ($connection->campaign_platforms_count ?? 0) > 0; @endphp
                                         <div class="flex flex-wrap items-center gap-2">
                                             <form method="POST" action="{{ route('web.platform-connections.update', ['platformConnection' => $connection], false) }}">
                                                 @csrf
@@ -125,9 +179,9 @@
                                                 </button>
                                             </form>
 
-                                            <form method="POST" action="{{ route('web.platform-connections.sync', ['platformConnection' => $connection], false) }}">
+                                            <form method="POST" action="{{ route('web.platform-connections.sync', ['platformConnection' => $connection], false) }}" data-toast-loading="Manual sync started for {{ $connection->account_name ?: 'this platform connection' }}." data-toast-loading-title="Starting sync">
                                                 @csrf
-                                                <button type="submit" class="rounded-md border border-sky-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sky-200 hover:border-sky-400">
+                                                <button type="submit" @disabled(! $hasLinkedCampaigns) title="{{ $hasLinkedCampaigns ? 'Run a manual sync' : 'No linked campaign-platforms to sync' }}" class="rounded-md border border-sky-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sky-200 hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-40">
                                                     Force Sync
                                                 </button>
                                             </form>
