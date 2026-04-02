@@ -132,9 +132,15 @@
                 @if (auth()->user()->isAdmin() || auth()->user()->isManager())
                     <form method="POST" action="{{ route('web.campaigns.ai-comments.regenerate', $campaign) }}" class="flex items-center gap-2">
                         @csrf
-                        <input type="hidden" name="days" value="{{ $selectedPeriod }}">
+                        <input type="hidden" name="days" value="{{ $activeTrendDays }}">
                         @if ($selectedPlatformId)
                             <input type="hidden" name="platform_id" value="{{ $selectedPlatformId }}">
+                        @endif
+                        @if ($selectedStartDate !== '')
+                            <input type="hidden" name="start_date" value="{{ $selectedStartDate }}">
+                        @endif
+                        @if ($selectedEndDate !== '')
+                            <input type="hidden" name="end_date" value="{{ $selectedEndDate }}">
                         @endif
                         <button type="submit" class="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-950 hover:bg-orange-400">
                             Update comments
@@ -189,10 +195,10 @@
 
         <section class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-4">
-                <h2 class="text-lg font-semibold text-white">Trend {{ $selectedPeriod }} days</h2>
+                <h2 class="text-lg font-semibold text-white">Trend {{ $activeTrendDays }} days</h2>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <form method="GET" action="{{ route('web.campaigns.show', $campaign) }}" class="flex items-center gap-2">
+                    <form method="GET" action="{{ route('web.campaigns.show', $campaign) }}" class="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="days" value="{{ $selectedPeriod }}">
                         <label for="platform_id" class="text-xs uppercase tracking-wider text-slate-400">Platform</label>
                         <select id="platform_id" name="platform_id" onchange="this.form.submit()" class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 focus:border-orange-300 focus:outline-none">
@@ -201,6 +207,20 @@
                                 <option value="{{ $platformOption->id }}" @selected((int) $selectedPlatformId === (int) $platformOption->id)>{{ $platformOption->name }}</option>
                             @endforeach
                         </select>
+
+                        <div>
+                            <label for="start_date" class="block text-xs uppercase tracking-wider text-slate-400">Start date</label>
+                            <input type="date" id="start_date" name="start_date" value="{{ $selectedStartDate }}" class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 focus:border-orange-300 focus:outline-none">
+                        </div>
+
+                        <div>
+                            <label for="end_date" class="block text-xs uppercase tracking-wider text-slate-400">End date</label>
+                            <input type="date" id="end_date" name="end_date" value="{{ $selectedEndDate }}" class="rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 focus:border-orange-300 focus:outline-none">
+                        </div>
+
+                        <button type="submit" class="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-950 hover:bg-orange-400">
+                            Apply
+                        </button>
                     </form>
 
                     @foreach ($periodOptions as $period)
@@ -212,7 +232,7 @@
                         </a>
                     @endforeach
                     <a
-                        href="{{ route('web.campaigns.trend.csv', ['campaign' => $campaign->id, 'days' => $selectedPeriod, 'platform_id' => $selectedPlatformId]) }}"
+                        href="{{ route('web.campaigns.trend.csv', ['campaign' => $campaign->id, 'days' => $selectedPeriod, 'platform_id' => $selectedPlatformId, 'start_date' => $selectedStartDate ?: null, 'end_date' => $selectedEndDate ?: null]) }}"
                         class="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-sky-300 hover:border-sky-300/60"
                     >
                         Export CSV

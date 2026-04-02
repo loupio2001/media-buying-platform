@@ -5,16 +5,22 @@ namespace App\Services\Api;
 use App\Models\Campaign;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class CampaignApiService
 {
     public function index(array $filters, int $perPage = 15): LengthAwarePaginator
     {
+        $startDate = !empty($filters['start_date']) ? Carbon::createFromFormat('Y-m-d', $filters['start_date'])->startOfDay() : null;
+        $endDate = !empty($filters['end_date']) ? Carbon::createFromFormat('Y-m-d', $filters['end_date'])->addDay()->startOfDay() : null;
+
         return Campaign::query()
             ->with(['client', 'campaignPlatforms.platform'])
             ->when(isset($filters['status']), fn ($q) => $q->where('status', $filters['status']))
             ->when(isset($filters['client_id']), fn ($q) => $q->where('client_id', $filters['client_id']))
+            ->when($startDate, fn ($q) => $q->where('created_at', '>=', $startDate))
+            ->when($endDate, fn ($q) => $q->where('created_at', '<', $endDate))
             ->paginate($perPage);
     }
 

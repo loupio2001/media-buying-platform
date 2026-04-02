@@ -35,6 +35,16 @@
                 </select>
             </div>
 
+            <div>
+                <label for="start_date" class="mb-1 block text-sm text-slate-300">Start date</label>
+                <input type="date" id="start_date" name="start_date" value="{{ $startDate }}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
+            </div>
+
+            <div>
+                <label for="end_date" class="mb-1 block text-sm text-slate-300">End date</label>
+                <input type="date" id="end_date" name="end_date" value="{{ $endDate }}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-orange-300 focus:outline-none">
+            </div>
+
             <div class="sm:col-span-3 flex items-center gap-2">
                 <button type="submit" class="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-orange-400">
                     Apply filters

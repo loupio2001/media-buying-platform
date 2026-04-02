@@ -16,8 +16,22 @@ class CampaignController extends ApiController
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['status', 'client_id']);
-        $perPage = (int) $request->integer('per_page', 15);
+        $validated = $request->validate([
+            'status' => ['nullable', 'string'],
+            'client_id' => ['nullable', 'integer'],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $filters = array_filter([
+            'status' => $validated['status'] ?? null,
+            'client_id' => $validated['client_id'] ?? null,
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+        ], fn ($value) => $value !== null && $value !== '');
+
+        $perPage = (int) ($validated['per_page'] ?? 15);
 
         return $this->respondPaginated($this->service->index($filters, $perPage));
     }
